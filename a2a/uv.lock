@@ -54,14 +54,14 @@ lint = [
 [package.metadata]
 requires-dist = [
     { name = "a2a-sdk" },
-    { name = "bankofai-x402", extras = ["tron"], git = "https://github.com/bankofai/x402?subdirectory=python%2Fx402&tag=v0.3.1" },
+    { name = "bankofai-x402", extras = ["tron"], git = "https://github.com/BofAI/x402?subdirectory=python%2Fx402&tag=v0.3.1" },
     { name = "cdp-sdk", specifier = ">=1.20.0" },
     { name = "click", specifier = ">=8.2.0" },
     { name = "google-adk", specifier = ">=0.5.0" },
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "uvicorn", specifier = ">=0.34.2" },
     { name = "web3", specifier = ">=7.10.0" },
-    { name = "x402-a2a", git = "https://github.com/bankofai/a2a-x402?subdirectory=python%2Fx402_a2a&branch=main" },
+    { name = "x402-a2a", git = "https://github.com/BofAI/a2a-x402?subdirectory=python%2Fx402_a2a&branch=main" },
 ]
 
 [package.metadata.requires-dev]
@@ -202,7 +202,7 @@ wheels = [
 [[package]]
 name = "bankofai-x402"
 version = "0.3.1"
-source = { git = "https://github.com/bankofai/x402?subdirectory=python%2Fx402&tag=v0.3.1#b7a9e0e103d2cabf0a32b52af735f0f632974074" }
+source = { git = "https://github.com/BofAI/x402?subdirectory=python%2Fx402&tag=v0.3.1#b7a9e0e103d2cabf0a32b52af735f0f632974074" }
 dependencies = [
     { name = "base58" },
     { name = "httpx" },
@@ -2352,7 +2352,7 @@ wheels = [
 [[package]]
 name = "x402-a2a"
 version = "1.0.0"
-source = { git = "https://github.com/bankofai/a2a-x402?subdirectory=python%2Fx402_a2a&branch=main#1ed12acd0957bd258081cd1fb6f4bfab426d5e41" }
+source = { git = "https://github.com/BofAI/a2a-x402?subdirectory=python%2Fx402_a2a&branch=main#1ed12acd0957bd258081cd1fb6f4bfab426d5e41" }
 dependencies = [
     { name = "a2a-sdk" },
     { name = "bankofai-x402", extra = ["tron"] },
