@@ -70,11 +70,6 @@ if not TRON_PRIVATE_KEY:
     print("\nPlease add your TRON private key to .env file\n")
     exit(1)
 
-if not BSC_PRIVATE_KEY:
-    print("\n❌ Error: BSC_PRIVATE_KEY not set in .env file")
-    print("\nPlease add your EVM private key to .env file\n")
-    exit(1)
-
 async def main():
     print("=" * 80)
     print("X402 Payment Client (Multi-Network)")
@@ -82,7 +77,6 @@ async def main():
 
     # --- Create signers for every chain family ---
     tron_signer = TronClientSigner.from_private_key(TRON_PRIVATE_KEY)
-    evm_signer = EvmClientSigner.from_private_key(BSC_PRIVATE_KEY)
 
     # Initialize GasFree API clients
     gasfree_clients = {
@@ -95,8 +89,11 @@ async def main():
     x402_client = X402Client()
     x402_client.register("tron:*", ExactPermitTronClientMechanism(tron_signer))
     x402_client.register("tron:*", ExactGasFreeClientMechanism(tron_signer, clients=gasfree_clients))
-    x402_client.register("eip155:*", ExactPermitEvmClientMechanism(evm_signer))
-    x402_client.register("eip155:*", ExactEvmClientMechanism(evm_signer))
+    if BSC_PRIVATE_KEY:
+        evm_signer = EvmClientSigner.from_private_key(BSC_PRIVATE_KEY)
+        for bsc_network in [NetworkConfig.BSC_TESTNET, NetworkConfig.BSC_MAINNET]:
+            x402_client.register(bsc_network, ExactPermitEvmClientMechanism(evm_signer))
+            x402_client.register(bsc_network, ExactEvmClientMechanism(evm_signer))
 
     # Balance policy: auto-resolves signers from registered mechanisms
     x402_client.register_policy(SufficientBalancePolicy)
@@ -104,7 +101,10 @@ async def main():
     x402_client.register_policy(PreferGasFreeUSDTPolicy)
 
     print(f"TRON Address: {tron_signer.get_address()}")
-    print(f"EVM  Address: {evm_signer.get_address()}")
+    if BSC_PRIVATE_KEY:
+        print(f"EVM  Address: {evm_signer.get_address()}")
+    else:
+        print("EVM: not configured (BSC_PRIVATE_KEY not set)")
     print(f"Resource URL: {RESOURCE_URL}")
 
     print(f"\nSupported Networks and Tokens:")
