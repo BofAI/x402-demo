@@ -54,7 +54,7 @@ lint = [
 [package.metadata]
 requires-dist = [
     { name = "a2a-sdk" },
-    { name = "bankofai-x402", extras = ["tron"], git = "https://github.com/bankofai/x402?subdirectory=python%2Fx402&tag=v0.3.1" },
+    { name = "bankofai-x402", extras = ["tron"], git = "https://github.com/BofAI/x402?subdirectory=python%2Fx402&tag=v0.4.0" },
     { name = "cdp-sdk", specifier = ">=1.20.0" },
     { name = "click", specifier = ">=8.2.0" },
     { name = "google-adk", specifier = ">=0.5.0" },
@@ -201,8 +201,8 @@ wheels = [
 
 [[package]]
 name = "bankofai-x402"
-version = "0.3.1"
-source = { git = "https://github.com/bankofai/x402?subdirectory=python%2Fx402&tag=v0.3.1#b7a9e0e103d2cabf0a32b52af735f0f632974074" }
+version = "0.4.0"
+source = { git = "https://github.com/BofAI/x402?subdirectory=python%2Fx402&tag=v0.4.0#1b30e025a3f828d6f211d16a007450193445d88c" }
 dependencies = [
     { name = "base58" },
     { name = "httpx" },
@@ -1686,8 +1686,6 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/59/fe/aae679b64363eb78326c7fdc9d06ec3de18bac68be4b612fc1fe8902693c/pycryptodome-3.23.0-cp37-abi3-win32.whl", hash = "sha256:507dbead45474b62b2bbe318eb1c4c8ee641077532067fec9c1aa82c31f84886", size = 1768484 },
     { url = "https://files.pythonhosted.org/packages/54/2f/e97a1b8294db0daaa87012c24a7bb714147c7ade7656973fd6c736b484ff/pycryptodome-3.23.0-cp37-abi3-win_amd64.whl", hash = "sha256:c75b52aacc6c0c260f204cbdd834f76edc9fb0d8e0da9fbf8352ef58202564e2", size = 1799636 },
     { url = "https://files.pythonhosted.org/packages/18/3d/f9441a0d798bf2b1e645adc3265e55706aead1255ccdad3856dbdcffec14/pycryptodome-3.23.0-cp37-abi3-win_arm64.whl", hash = "sha256:11eeeb6917903876f134b56ba11abe95c0b0fd5e3330def218083c7d98bbcb3c", size = 1703675 },
-    { url = "https://files.pythonhosted.org/packages/9f/7c/f5b0556590e7b4e710509105e668adb55aa9470a9f0e4dea9c40a4a11ce1/pycryptodome-3.23.0-pp27-pypy_73-manylinux2010_x86_64.whl", hash = "sha256:350ebc1eba1da729b35ab7627a833a1a355ee4e852d8ba0447fafe7b14504d56", size = 1705791 },
-    { url = "https://files.pythonhosted.org/packages/33/38/dcc795578d610ea1aaffef4b148b8cafcfcf4d126b1e58231ddc4e475c70/pycryptodome-3.23.0-pp27-pypy_73-win32.whl", hash = "sha256:93837e379a3e5fd2bb00302a47aee9fdf7940d83595be3915752c74033d17ca7", size = 1780265 },
 ]
 
 [[package]]

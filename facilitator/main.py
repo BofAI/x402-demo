@@ -29,7 +29,6 @@ from bankofai.x402.tokens import TokenRegistry
 from bankofai.x402.types import (
     PaymentPayload,
     PaymentRequirements,
-    SupportedFee,
 )
 from pydantic import BaseModel
 
@@ -180,7 +179,7 @@ print("=" * 80)
 @app.get("/supported")
 def supported():
     """Get supported capabilities"""
-    return facilitator.supported(pricing="flat")
+    return facilitator.supported()
 
 
 @app.post("/fee/quote")

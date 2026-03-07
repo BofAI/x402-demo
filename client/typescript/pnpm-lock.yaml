@@ -9,14 +9,14 @@ importers:
   .:
     dependencies:
       '@bankofai/x402':
-        specifier: file:../../../x402-tron/typescript/packages/x402
-        version: file:../../../x402-tron/typescript/packages/x402(tronweb@6.2.1)(typescript@5.9.3)
+        specifier: 0.4.1
+        version: 0.4.1(tronweb@6.2.2)(typescript@5.9.3)
       dotenv:
         specifier: ^16.3.1
         version: 16.6.1
       tronweb:
         specifier: ^6.0.0
-        version: 6.2.1
+        version: 6.2.2
       viem:
         specifier: ^2.45.2
         version: 2.47.0(typescript@5.9.3)
@@ -47,8 +47,8 @@ packages:
     resolution: {integrity: sha512-2WJMeRQPHKSPemqk/awGrAiuFfzBmOIPXKizAsVhWH9YJqLZ0H+HS4c8loHGgW6utJ3E/ejXQUsiGaQy2NZ9Fw==}
     engines: {node: '>=6.9.0'}
 
-  '@bankofai/x402@file:../../../x402-tron/typescript/packages/x402':
-    resolution: {directory: ../../../x402-tron/typescript/packages/x402, type: directory}
+  '@bankofai/x402@0.4.1':
+    resolution: {integrity: sha512-jUj+V7kEg2AzElltUdVP2uEkiUOAU2+E6DP1ucfbVvMWWLBQne7i6FLh1U6mbJvgua2+VVwCBs1yqlnkbEl98Q==}
     engines: {node: '>=18.0.0'}
     peerDependencies:
       tronweb: ^5.0.0 || ^6.0.0
@@ -696,8 +696,8 @@ packages:
   tronweb@6.1.1:
     resolution: {integrity: sha512-9i2N+cTkRY7Y1B/V0+ZVwCYZFhdFDalh8sbI8Tpj5O65hMURvjFnaP1u/dTwVnVw07d9M143/19KarxeAzK6pg==}
 
-  tronweb@6.2.1:
-    resolution: {integrity: sha512-qDzdz5Qzuc9dfxYzo6yodfwtoIL+C/h1l3HbzwYJwNGgaj/owbzlLROjrlF/3Py7gO8QbTD0v4GuPQRJ1ZzseA==}
+  tronweb@6.2.2:
+    resolution: {integrity: sha512-jRBf4+7fJ0HUVzveBi0tE21r3EygCNtbYE92T38Sxlwr/x320W2vz+dvGLOIpp4kW/CvJ4HLvtnb6U30A0V2eA==}
 
   tslib@2.7.0:
     resolution: {integrity: sha512-gLXCKdN1/j47AiHiOkJN69hJmcbGTHI0ImLmbYLHykhgeN0jVGola9yVjFgzCUklsZQMW55o+dW7IXv3RCXDzA==}
@@ -786,10 +786,10 @@ snapshots:
     dependencies:
       regenerator-runtime: 0.14.1
 
-  '@bankofai/x402@file:../../../x402-tron/typescript/packages/x402(tronweb@6.2.1)(typescript@5.9.3)':
+  '@bankofai/x402@0.4.1(tronweb@6.2.2)(typescript@5.9.3)':
     dependencies:
       '@gasfree/gasfree-sdk': 1.1.2
-      tronweb: 6.2.1
+      tronweb: 6.2.2
       viem: 2.47.0(typescript@5.9.3)
     transitivePeerDependencies:
       - bufferutil
@@ -1516,7 +1516,7 @@ snapshots:
       - debug
       - utf-8-validate
 
-  tronweb@6.2.1:
+  tronweb@6.2.2:
     dependencies:
       '@babel/runtime': 7.26.10
       axios: 1.13.5
