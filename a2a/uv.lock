@@ -54,7 +54,7 @@ lint = [
 [package.metadata]
 requires-dist = [
     { name = "a2a-sdk" },
-    { name = "bankofai-x402", extras = ["tron"], git = "https://github.com/BofAI/x402?subdirectory=python%2Fx402&tag=v0.4.0" },
+    { name = "bankofai-x402", extras = ["tron"], git = "https://github.com/BofAI/x402?subdirectory=python%2Fx402&tag=v0.4.1" },
     { name = "cdp-sdk", specifier = ">=1.20.0" },
     { name = "click", specifier = ">=8.2.0" },
     { name = "google-adk", specifier = ">=0.5.0" },
@@ -201,8 +201,8 @@ wheels = [
 
 [[package]]
 name = "bankofai-x402"
-version = "0.4.0"
-source = { git = "https://github.com/BofAI/x402?subdirectory=python%2Fx402&tag=v0.4.0#1b30e025a3f828d6f211d16a007450193445d88c" }
+version = "0.4.1"
+source = { git = "https://github.com/BofAI/x402?subdirectory=python%2Fx402&tag=v0.4.1#345d83167ccb9a8470734893a128186a76ec28a8" }
 dependencies = [
     { name = "base58" },
     { name = "httpx" },
