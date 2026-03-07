@@ -13,6 +13,8 @@ from bankofai.x402.facilitator import FacilitatorClient
 from bankofai.x402.config import NetworkConfig
 from bankofai.x402.mechanisms.evm.exact_permit import ExactPermitEvmServerMechanism
 from bankofai.x402.mechanisms.evm.exact import ExactEvmServerMechanism
+from bankofai.x402.mechanisms.tron.exact_permit import ExactPermitTronServerMechanism
+from bankofai.x402.mechanisms.tron.exact_gasfree.server import ExactGasFreeServerMechanism
 from bankofai.x402.tokens import TokenInfo, TokenRegistry
 
 from PIL import Image, ImageDraw, ImageFont
@@ -72,12 +74,14 @@ _request_count = 0
 
 # Initialize server (TRON mechanisms auto-registered by default)
 server = X402Server()
-# Register BSC testnet mechanisms
-server.register(NetworkConfig.BSC_TESTNET, ExactPermitEvmServerMechanism())
-server.register(NetworkConfig.BSC_TESTNET, ExactEvmServerMechanism())
-# Register BSC mainnet mechanisms
-server.register(NetworkConfig.BSC_MAINNET, ExactPermitEvmServerMechanism())
-server.register(NetworkConfig.BSC_MAINNET, ExactEvmServerMechanism())
+# Register TRON GasFree mechanism
+server.register(NetworkConfig.TRON_NILE, ExactGasFreeServerMechanism())
+# Register BSC mechanisms (optional - requires BSC_PAY_TO_ADDRESS)
+if BSC_PAY_TO_ADDRESS:
+    server.register(NetworkConfig.BSC_TESTNET, ExactPermitEvmServerMechanism())
+    server.register(NetworkConfig.BSC_TESTNET, ExactEvmServerMechanism())
+    server.register(NetworkConfig.BSC_MAINNET, ExactPermitEvmServerMechanism())
+    server.register(NetworkConfig.BSC_MAINNET, ExactEvmServerMechanism())
 # Add facilitator (with X-API-KEY if configured)
 facilitator_headers = {"X-API-KEY": FACILITATOR_API_KEY} if FACILITATOR_API_KEY else None
 facilitator = FacilitatorClient(
@@ -166,8 +170,8 @@ async def root():
 @app.get("/protected-nile")
 @x402_protected(
     server=server,
-    prices=["0.0001 USDT", "0.0001 USDD"],
-    schemes=["exact_permit", "exact_permit"],
+    prices=["0.0001 USDT", "0.0001 USDD", "0.0001 USDT", "0.0001 USDD"],
+    schemes=["exact_permit", "exact_permit", "exact_gasfree", "exact_gasfree"],
     network=CURRENT_NETWORK,
     pay_to=PAY_TO_ADDRESS,
 )
@@ -235,52 +239,53 @@ async def protected_mainnet_endpoint(request: Request):
     return StreamingResponse(buf, media_type="image/png")
 
 
-@app.get("/protected-bsc-mainnet")
-@x402_protected(
-    server=server,
-    prices=["0.0001 USDC", "0.0001 USDT", "0.0001 EPS"],
-    network=NetworkConfig.BSC_MAINNET,
-    pay_to=BSC_PAY_TO_ADDRESS,
-    schemes=["exact_permit", "exact_permit", "exact_permit"],
-)
-async def protected_bsc_mainnet_endpoint(request: Request):
-    """Serve the protected image (BSC mainnet payment) - generated dynamically"""
-    global _request_count
-    if not PROTECTED_IMAGE_PATH.exists():
-        return {"error": "Protected image not found"}
+if BSC_PAY_TO_ADDRESS:
 
-    with _request_count_lock:
-        _request_count += 1
-        request_count = _request_count
-
-    buf = generate_protected_image(
-        f"bsc-mainnet req: {request_count}", text_color=(255, 165, 0, 255)
+    @app.get("/protected-bsc-mainnet")
+    @x402_protected(
+        server=server,
+        prices=["0.0001 USDC", "0.0001 USDT", "0.0001 EPS"],
+        network=NetworkConfig.BSC_MAINNET,
+        pay_to=BSC_PAY_TO_ADDRESS,
+        schemes=["exact_permit", "exact_permit", "exact_permit"],
     )
-    return StreamingResponse(buf, media_type="image/png")
+    async def protected_bsc_mainnet_endpoint(request: Request):
+        """Serve the protected image (BSC mainnet payment) - generated dynamically"""
+        global _request_count
+        if not PROTECTED_IMAGE_PATH.exists():
+            return {"error": "Protected image not found"}
 
+        with _request_count_lock:
+            _request_count += 1
+            request_count = _request_count
 
-@app.get("/protected-bsc-testnet")
-@x402_protected(
-    server=server,
-    prices=["0.0001 USDT", "0.0001 USDC", "0.0001 DHLU"],
-    network=NetworkConfig.BSC_TESTNET,
-    pay_to=BSC_PAY_TO_ADDRESS,
-    schemes=["exact_permit", "exact_permit", "exact"],
-)
-async def protected_bsc_testnet_endpoint(request: Request):
-    """Serve the protected image (BSC testnet payment) - generated dynamically"""
-    global _request_count
-    if not PROTECTED_IMAGE_PATH.exists():
-        return {"error": "Protected image not found"}
+        buf = generate_protected_image(
+            f"bsc-mainnet req: {request_count}", text_color=(255, 165, 0, 255)
+        )
+        return StreamingResponse(buf, media_type="image/png")
 
-    with _request_count_lock:
-        _request_count += 1
-        request_count = _request_count
-
-    buf = generate_protected_image(
-        f"bsc-test req: {request_count}", text_color=(0, 200, 255, 255)
+    @app.get("/protected-bsc-testnet")
+    @x402_protected(
+        server=server,
+        prices=["0.0001 USDT", "0.0001 USDC", "0.0001 DHLU"],
+        network=NetworkConfig.BSC_TESTNET,
+        pay_to=BSC_PAY_TO_ADDRESS,
+        schemes=["exact_permit", "exact_permit", "exact"],
     )
-    return StreamingResponse(buf, media_type="image/png")
+    async def protected_bsc_testnet_endpoint(request: Request):
+        """Serve the protected image (BSC testnet payment) - generated dynamically"""
+        global _request_count
+        if not PROTECTED_IMAGE_PATH.exists():
+            return {"error": "Protected image not found"}
+
+        with _request_count_lock:
+            _request_count += 1
+            request_count = _request_count
+
+        buf = generate_protected_image(
+            f"bsc-test req: {request_count}", text_color=(0, 200, 255, 255)
+        )
+        return StreamingResponse(buf, media_type="image/png")
 
 
 if __name__ == "__main__":

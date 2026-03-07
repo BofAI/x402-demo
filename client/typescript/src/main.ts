@@ -15,6 +15,7 @@ import {
   X402Client,
   X402FetchClient,
   ExactPermitTronClientMechanism,
+  ExactGasFreeClientMechanism,
   ExactPermitEvmClientMechanism,
   ExactEvmClientMechanism,
   TronClientSigner,
@@ -23,6 +24,11 @@ import {
   SufficientBalancePolicy,
   decodePaymentPayload,
   type SettleResponse,
+  type PaymentPolicy,
+  type PaymentRequirements,
+  GasFreeAPIClient,
+  getGasFreeApiBaseUrl,
+  findByAddress,
 } from '@bankofai/x402';
 
 // ---------------------------------------------------------------------------
@@ -39,18 +45,14 @@ const SERVER_URL       = process.env.SERVER_URL ?? 'http://localhost:8000';
 
 // Change ENDPOINT to target a different server resource.
 // The server may return accepts[] spanning multiple networks.
-// const ENDPOINT         = '/protected-nile';
+const ENDPOINT         = '/protected-nile';
 // const ENDPOINT         = '/protected-mainnet';
 // const ENDPOINT         = '/protected-bsc-mainnet';
-const ENDPOINT         = '/protected-bsc-testnet';
+// const ENDPOINT         = '/protected-bsc-testnet';
 
 
 if (!TRON_PRIVATE_KEY) {
   console.error('Error: TRON_PRIVATE_KEY not set in .env');
-  process.exit(1);
-}
-if (!BSC_PRIVATE_KEY) {
-  console.error('Error: BSC_PRIVATE_KEY not set in .env');
   process.exit(1);
 }
 
@@ -86,24 +88,55 @@ async function saveImage(response: Response): Promise<string> {
 async function main(): Promise<void> {
   // --- Create signers for every chain family ---
   const tronSigner = new TronClientSigner(TRON_PRIVATE_KEY);
-  const evmSigner  = new EvmClientSigner(BSC_PRIVATE_KEY);
 
   hr();
   console.log('X402 Client (TypeScript · Multi-Network)');
   hr();
   console.log(`  TRON Address : ${tronSigner.getAddress()}`);
-  console.log(`  EVM  Address : ${evmSigner.getAddress()}`);
+  if (BSC_PRIVATE_KEY) {
+    console.log(`  EVM  Address : ${new EvmClientSigner(BSC_PRIVATE_KEY).getAddress()}`);
+  } else {
+    console.log('  EVM: not configured (BSC_PRIVATE_KEY not set)');
+  }
   console.log(`  Resource     : ${SERVER_URL}${ENDPOINT}`);
   hr();
 
+  // --- Initialize GasFree API clients ---
+  const gasfreeClients: Record<string, GasFreeAPIClient> = {
+    'tron:nile': new GasFreeAPIClient(getGasFreeApiBaseUrl('tron:nile')),
+    'tron:shasta': new GasFreeAPIClient(getGasFreeApiBaseUrl('tron:shasta')),
+    'tron:mainnet': new GasFreeAPIClient(getGasFreeApiBaseUrl('tron:mainnet')),
+  };
+
   // --- Register mechanisms for ALL networks ---
   const x402 = new X402Client({ tokenStrategy: new DefaultTokenSelectionStrategy() });
-  x402.register('tron:*',   new ExactPermitTronClientMechanism(tronSigner));
-  x402.register('eip155:*', new ExactPermitEvmClientMechanism(evmSigner));
-  x402.register('eip155:*', new ExactEvmClientMechanism(evmSigner));
+  x402.register('tron:*', new ExactPermitTronClientMechanism(tronSigner));
+  x402.register('tron:*', new ExactGasFreeClientMechanism(tronSigner, gasfreeClients));
+
+  if (BSC_PRIVATE_KEY) {
+    const evmSigner = new EvmClientSigner(BSC_PRIVATE_KEY);
+    x402.register('eip155:97', new ExactPermitEvmClientMechanism(evmSigner));
+    x402.register('eip155:97', new ExactEvmClientMechanism(evmSigner));
+    x402.register('eip155:56', new ExactPermitEvmClientMechanism(evmSigner));
+    x402.register('eip155:56', new ExactEvmClientMechanism(evmSigner));
+  }
 
   // Balance policy: auto-resolves signers from registered mechanisms
   x402.registerPolicy(SufficientBalancePolicy);
+
+  // Prefer exact_gasfree USDT (same as Python client's PreferGasFreeUSDTPolicy)
+  x402.registerPolicy({
+    apply(requirements: PaymentRequirements[]): PaymentRequirements[] {
+      for (const req of requirements) {
+        const tokenInfo = findByAddress(req.network, req.asset);
+        if (req.scheme === 'exact_gasfree' && tokenInfo?.symbol === 'USDT') {
+          console.log(`🎯 Policy: Force selecting ${req.scheme} (${tokenInfo.symbol})`);
+          return [req];
+        }
+      }
+      return requirements;
+    },
+  });
 
   const client = new X402FetchClient(x402);
 

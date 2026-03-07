@@ -18,10 +18,27 @@ import logging
 from dotenv import load_dotenv
 from bankofai.x402.clients import X402Client, X402HttpClient, SufficientBalancePolicy
 from bankofai.x402.mechanisms.tron.exact_permit import ExactPermitTronClientMechanism
+from bankofai.x402.mechanisms.tron.exact_gasfree.client import ExactGasFreeClientMechanism
+from bankofai.x402.utils.gasfree import GasFreeAPIClient
+from bankofai.x402.config import NetworkConfig
 from bankofai.x402.mechanisms.evm.exact_permit import ExactPermitEvmClientMechanism
 from bankofai.x402.mechanisms.evm.exact import ExactEvmClientMechanism
 from bankofai.x402.signers.client import TronClientSigner, EvmClientSigner
 from bankofai.x402.tokens import TokenRegistry
+from bankofai.x402.types import PaymentRequirements
+
+# Custom policy to prefer exact_gasfree USDT
+class PreferGasFreeUSDTPolicy:
+    def __init__(self, client: X402Client) -> None:
+        self._client = client
+
+    async def apply(self, requirements: list[PaymentRequirements]) -> list[PaymentRequirements]:
+        for req in requirements:
+            token_info = TokenRegistry.find_by_address(req.network, req.asset)
+            if req.scheme == "exact_gasfree" and token_info and token_info.symbol == "USDT":
+                print(f"🎯 Policy: Force selecting {req.scheme} ({token_info.symbol})")
+                return [req]
+        return requirements
 
 # Enable detailed logging
 logging.basicConfig(
@@ -53,11 +70,6 @@ if not TRON_PRIVATE_KEY:
     print("\nPlease add your TRON private key to .env file\n")
     exit(1)
 
-if not BSC_PRIVATE_KEY:
-    print("\n❌ Error: BSC_PRIVATE_KEY not set in .env file")
-    print("\nPlease add your EVM private key to .env file\n")
-    exit(1)
-
 async def main():
     print("=" * 80)
     print("X402 Payment Client (Multi-Network)")
@@ -65,19 +77,34 @@ async def main():
 
     # --- Create signers for every chain family ---
     tron_signer = TronClientSigner.from_private_key(TRON_PRIVATE_KEY)
-    evm_signer = EvmClientSigner.from_private_key(BSC_PRIVATE_KEY)
+
+    # Initialize GasFree API clients
+    gasfree_clients = {
+        "tron:nile": GasFreeAPIClient(NetworkConfig.get_gasfree_api_base_url("tron:nile")),
+        "tron:shasta": GasFreeAPIClient(NetworkConfig.get_gasfree_api_base_url("tron:shasta")),
+        "tron:mainnet": GasFreeAPIClient(NetworkConfig.get_gasfree_api_base_url("tron:mainnet")),
+    }
 
     # --- Register mechanisms for ALL networks ---
     x402_client = X402Client()
     x402_client.register("tron:*", ExactPermitTronClientMechanism(tron_signer))
-    x402_client.register("eip155:*", ExactPermitEvmClientMechanism(evm_signer))
-    x402_client.register("eip155:*", ExactEvmClientMechanism(evm_signer))
+    x402_client.register("tron:*", ExactGasFreeClientMechanism(tron_signer, clients=gasfree_clients))
+    if BSC_PRIVATE_KEY:
+        evm_signer = EvmClientSigner.from_private_key(BSC_PRIVATE_KEY)
+        for bsc_network in [NetworkConfig.BSC_TESTNET, NetworkConfig.BSC_MAINNET]:
+            x402_client.register(bsc_network, ExactPermitEvmClientMechanism(evm_signer))
+            x402_client.register(bsc_network, ExactEvmClientMechanism(evm_signer))
 
     # Balance policy: auto-resolves signers from registered mechanisms
     x402_client.register_policy(SufficientBalancePolicy)
+    # Register custom selection policy (AFTER balance check)
+    x402_client.register_policy(PreferGasFreeUSDTPolicy)
 
     print(f"TRON Address: {tron_signer.get_address()}")
-    print(f"EVM  Address: {evm_signer.get_address()}")
+    if BSC_PRIVATE_KEY:
+        print(f"EVM  Address: {evm_signer.get_address()}")
+    else:
+        print("EVM: not configured (BSC_PRIVATE_KEY not set)")
     print(f"Resource URL: {RESOURCE_URL}")
 
     print(f"\nSupported Networks and Tokens:")

@@ -16,6 +16,10 @@ import uvicorn
 
 from bankofai.x402.logging_config import setup_logging
 from bankofai.x402.facilitator import X402Facilitator
+from bankofai.x402.mechanisms.tron.exact_gasfree.facilitator import (
+    ExactGasFreeFacilitatorMechanism,
+)
+from bankofai.x402.utils.gasfree import GasFreeAPIClient
 from bankofai.x402.mechanisms.tron.exact_permit import ExactPermitTronFacilitatorMechanism
 from bankofai.x402.mechanisms.evm.exact_permit import ExactPermitEvmFacilitatorMechanism
 from bankofai.x402.mechanisms.evm.exact import ExactEvmFacilitatorMechanism
@@ -25,7 +29,6 @@ from bankofai.x402.tokens import TokenRegistry
 from bankofai.x402.types import (
     PaymentPayload,
     PaymentRequirements,
-    SupportedFee,
 )
 from pydantic import BaseModel
 
@@ -79,8 +82,6 @@ BSC_MAINNET_BASE_FEE = {
 
 if not TRON_PRIVATE_KEY:
     raise ValueError("TRON_PRIVATE_KEY environment variable is required")
-if not BSC_PRIVATE_KEY:
-    raise ValueError("BSC_PRIVATE_KEY environment variable is required")
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -98,12 +99,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Get facilitator addresses
-bsc_signer = EvmFacilitatorSigner.from_private_key(BSC_PRIVATE_KEY)
-bsc_facilitator_address = bsc_signer.get_address()
-
 # Initialize X402Facilitator
 facilitator = X402Facilitator()
+
+# Initialize GasFree API clients
+gasfree_clients = {
+    "tron:nile": GasFreeAPIClient(NetworkConfig.get_gasfree_api_base_url("tron:nile")),
+}
 
 # Register TRON mechanisms
 for network in TRON_NETWORKS:
@@ -114,41 +116,52 @@ for network in TRON_NETWORKS:
     )
     facilitator.register([f"tron:{network}"], mechanism)
 
-# Register BSC testnet mechanisms (exact + exact)
-bsc_exact_mechanism = ExactPermitEvmFacilitatorMechanism(
-    bsc_signer,
-    fee_to=bsc_facilitator_address,
-    base_fee=BSC_BASE_FEE,
-)
-facilitator.register([NetworkConfig.BSC_TESTNET], bsc_exact_mechanism)
+    # Add GasFree support for nile
+    if network == "nile":
+        gasfree_mechanism = ExactGasFreeFacilitatorMechanism(
+            signer,
+            clients=gasfree_clients,
+            base_fee=TRON_BASE_FEE,
+        )
+        facilitator.register([f"tron:{network}"], gasfree_mechanism)
 
-bsc_native_mechanism = ExactEvmFacilitatorMechanism(
-    bsc_signer,
-)
-facilitator.register([NetworkConfig.BSC_TESTNET], bsc_native_mechanism)
+# Register BSC mechanisms (optional - requires BSC_PRIVATE_KEY)
+if BSC_PRIVATE_KEY:
+    bsc_signer = EvmFacilitatorSigner.from_private_key(BSC_PRIVATE_KEY)
+    bsc_facilitator_address = bsc_signer.get_address()
 
-# Register BSC mainnet mechanisms (exact + exact)
-bsc_mainnet_signer = EvmFacilitatorSigner.from_private_key(BSC_PRIVATE_KEY)
-bsc_mainnet_facilitator_address = bsc_mainnet_signer.get_address()
+    bsc_exact_mechanism = ExactPermitEvmFacilitatorMechanism(
+        bsc_signer,
+        fee_to=bsc_facilitator_address,
+        base_fee=BSC_BASE_FEE,
+    )
+    facilitator.register([NetworkConfig.BSC_TESTNET], bsc_exact_mechanism)
 
-bsc_mainnet_exact_mechanism = ExactPermitEvmFacilitatorMechanism(
-    bsc_mainnet_signer,
-    fee_to=bsc_mainnet_facilitator_address,
-    base_fee=BSC_MAINNET_BASE_FEE,
-)
-facilitator.register([NetworkConfig.BSC_MAINNET], bsc_mainnet_exact_mechanism)
+    bsc_native_mechanism = ExactEvmFacilitatorMechanism(bsc_signer)
+    facilitator.register([NetworkConfig.BSC_TESTNET], bsc_native_mechanism)
 
-bsc_mainnet_native_mechanism = ExactEvmFacilitatorMechanism(
-    bsc_mainnet_signer,
-)
-facilitator.register([NetworkConfig.BSC_MAINNET], bsc_mainnet_native_mechanism)
+    bsc_mainnet_signer = EvmFacilitatorSigner.from_private_key(BSC_PRIVATE_KEY)
+    bsc_mainnet_facilitator_address = bsc_mainnet_signer.get_address()
+
+    bsc_mainnet_exact_mechanism = ExactPermitEvmFacilitatorMechanism(
+        bsc_mainnet_signer,
+        fee_to=bsc_mainnet_facilitator_address,
+        base_fee=BSC_MAINNET_BASE_FEE,
+    )
+    facilitator.register([NetworkConfig.BSC_MAINNET], bsc_mainnet_exact_mechanism)
+
+    bsc_mainnet_native_mechanism = ExactEvmFacilitatorMechanism(bsc_mainnet_signer)
+    facilitator.register([NetworkConfig.BSC_MAINNET], bsc_mainnet_native_mechanism)
 
 print("=" * 80)
 print("X402 Payment Facilitator - Configuration")
 print("=" * 80)
-print(f"BSC  Facilitator Address: {bsc_facilitator_address}")
+if BSC_PRIVATE_KEY:
+    print(f"BSC  Facilitator Address: {bsc_facilitator_address}")
+    print(f"BSC  Base Fee: {BSC_BASE_FEE}")
+else:
+    print("BSC: not configured (BSC_PRIVATE_KEY not set)")
 print(f"TRON Base Fee: {TRON_BASE_FEE}")
-print(f"BSC  Base Fee: {BSC_BASE_FEE}")
 
 all_networks = [f"tron:{n}" for n in TRON_NETWORKS] + [NetworkConfig.BSC_MAINNET, NetworkConfig.BSC_TESTNET]
 print(f"Supported Networks: {', '.join(all_networks)}")
@@ -166,7 +179,7 @@ print("=" * 80)
 @app.get("/supported")
 def supported():
     """Get supported capabilities"""
-    return facilitator.supported(pricing="flat")
+    return facilitator.supported()
 
 
 @app.post("/fee/quote")
@@ -236,7 +249,6 @@ def main():
     print("=" * 80)
     print(f"Host: {FACILITATOR_HOST}")
     print(f"Port: {FACILITATOR_PORT}")
-    print(f"BSC  Facilitator Address: {bsc_facilitator_address}")
     print(f"Supported Networks: {', '.join(all_networks)}")
     print("=" * 80)
     print("\nEndpoints:")
