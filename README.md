@@ -2,49 +2,63 @@
 
 ## Overview
 
-The **X402 Demo** provides a practical demonstration of integrating the **x402 payment protocol** with the TRON blockchain. While not a fully-fledged application, this demo aims to showcase how decentralized micropayments can be used to enable pay-per-access workflows.
+The **X402 Demo** provides a practical demonstration of integrating the **x402 payment protocol** with the TRON and BSC blockchains. It showcases how decentralized micropayments can enable pay-per-access workflows — including gasless transactions via GasFree and multi-agent orchestration via A2A.
 
-### Key Concept: Payment Workflow Simulation
+### Payment Workflow
 
 The demo simulates a payment workflow involving three conceptual agents:
-1. The **Client Agent** requests access to protected resources from the **Server Agent**.
-2. Upon receiving a `402 Payment Required` challenge, the Client signs a cryptographic permit to meet payment requirements.
-3. The **Facilitator Agent** validates the signed permit and settles the transaction on the TRON blockchain.
-4. Once payment confirmation is complete, the Server delivers the requested resource.
-
-Though the implementation relies on standard Python services, the demo is designed to illustrate the x402 payment flow conceptually. It demonstrates:
-- Cryptographic payment permits (TIP-712 format).
-- Blockchain transaction validation and settlement.
+1. The **Client** requests access to a protected resource from the **Server**.
+2. Upon receiving a `402 Payment Required` challenge, the Client signs a cryptographic permit (TIP-712 for TRON, EIP-712 for BSC).
+3. The **Facilitator** validates the signed permit and settles the transaction on-chain.
+4. Once payment is confirmed, the Server delivers the requested resource.
 
 ---
 
 ## Table of Contents
 1. [Core Components](#core-components)
-2. [Environment Setup](#environment-setup)
-3. [Quick Start](#quick-start)
-4. [License](#license)
-5. [Additional Documentation](#additional-documentation)
+2. [Supported Networks & Tokens](#supported-networks--tokens)
+3. [Environment Setup](#environment-setup)
+4. [Quick Start](#quick-start)
+5. [A2A Agent Demo](#a2a-agent-demo)
+6. [License](#license)
+7. [Additional Documentation](#additional-documentation)
 
 ---
 
 ## Core Components
 
-### **Server: Resource Provider**
-- **Purpose:** Hosts protected resources requiring blockchain-based payments.
-- **Implementation:**
-  - Verifies cryptographic payment receipts.
-  - Securely delivers resources upon payment validation.
+### Server (Resource Provider)
+- Hosts protected resources requiring blockchain-based payments.
+- Validates cryptographic payment receipts via the Facilitator.
+- Supports per-endpoint pricing with multiple payment schemes (`exact_permit`, `exact_gasfree`).
 
-### **Facilitator: Payment Processor**
-- **Purpose:** Intermediates payment validation and transaction settlement on the blockchain.
-- **Implementation:**
-  - Validates signed payment permits (TIP-712).
-  - Settles micropayments using the TRON Nile Testnet.
-- **Deployment:** Can be self-hosted (using this repository) or provided by an official service (*official address coming soon*).
+### Facilitator (Payment Processor)
+- Validates signed payment permits and settles transactions on-chain.
+- Supports both standard permit-based payments and **GasFree** gasless transactions on TRON.
+- Can be self-hosted or use the official hosted service at `https://facilitator.bankofai.io`.
 
-### **Client: Resource Requester**
-- **CLI Client:** Automates permit signing and resource retrieval workflows.
-- **Web Client:** Offers a user-friendly interface for interacting with TronLink wallets.
+### Client (Resource Requester)
+- **Python CLI** — Automates permit signing and resource retrieval.
+- **TypeScript CLI** — Feature parity with the Python client, built on `tronweb` and `viem`.
+- **Web Client (A2A)** — Interactive React UI with TronLink wallet integration, powered by Google ADK.
+
+---
+
+## Supported Networks & Tokens
+
+| Network | Chain ID | Tokens | Payment Schemes |
+|---------|----------|--------|-----------------|
+| TRON Nile (testnet) | `tron:nile` | USDT, USDD | `exact_permit`, `exact_gasfree` |
+| TRON Shasta (testnet) | `tron:shasta` | USDT | `exact_permit` |
+| TRON Mainnet | `tron:mainnet` | USDT, USDD | `exact_permit` |
+| BSC Testnet (optional) | `eip155:97` | USDT, USDC, DHLU | `exact_permit`, `exact` |
+| BSC Mainnet (optional) | `eip155:56` | USDC, USDT, EPS | `exact_permit`, `exact` |
+
+> BSC support requires `BSC_PRIVATE_KEY` to be configured.
+
+### GasFree (Gasless Transactions)
+
+GasFree eliminates transaction fees for TRON payments. When enabled, the client can use a custom selection policy (`PreferGasFreeUSDTPolicy`) to automatically prefer gasless transactions.
 
 ---
 
@@ -52,21 +66,31 @@ Though the implementation relies on standard Python services, the demo is design
 
 ### Prerequisites
 - **Python 3.9+** (for local execution)
-- **Node.js 18+** (for Web Client development)
+- **Node.js 18+** (for TypeScript client)
 - **Docker** (optional, for containerized deployment)
 
 ### Configuration
-Before running the demo, create a `.env` file in the project root:
+
+Copy `.env.sample` to `.env` and fill in your values:
 
 ```env
-# TRON private key for Facilitator's blockchain interactions.
+# Required
 TRON_PRIVATE_KEY=<your_tron_private_key>
+PAY_TO_ADDRESS=<server_recipient_tron_address>
 
-# TronGrid API key for Facilitator TRON RPC access (required for reliable on-chain reads/writes, especially on `tron:mainnet`). Apply at https://www.trongrid.io/ (create an API key in the TronGrid Dashboard).
+# Optional: TronGrid API key for mainnet RPC access
 TRON_GRID_API_KEY=<your_trongrid_api_key>
 
-# Payment recipient address for Server.
-PAY_TO_ADDRESS=<server_recipient_tron_address>
+# Optional: BSC support
+BSC_PRIVATE_KEY=<your_evm_private_key>
+BSC_PAY_TO_ADDRESS=<server_recipient_evm_address>
+
+# Optional: GasFree gasless transactions (per-network)
+GASFREE_API_KEY_NILE=<key>
+GASFREE_API_SECRET_NILE=<secret>
+
+# Optional: Facilitator authentication
+FACILITATOR_API_KEY=<your_api_key>
 
 # Service URLs (defaults)
 SERVER_URL=http://localhost:8000
@@ -74,17 +98,15 @@ FACILITATOR_URL=http://localhost:8001
 HTTP_TIMEOUT_SECONDS=60
 ```
 
-Notes:
-- If you enable `tron:mainnet`, the facilitator relies on TronGrid (or another TRON JSON-RPC endpoint) to build and broadcast transactions.
-- Without a valid `TRON_GRID_API_KEY`, requests may fail with HTTP `429 Too Many Requests` due to rate limiting.
+See [`.env.sample`](.env.sample) for the full list of configuration options.
 
 ---
 
 ## Quick Start
 
-### Step 1: Start X402 Service
+### Step 1: Start Services
 
-Start the essential services (Facilitator and Server) to enable the x402 payment protocol:
+Start the Facilitator and Server to enable the x402 payment protocol:
 
 **Using Scripts:**
 ```bash
@@ -100,13 +122,68 @@ Start the essential services (Facilitator and Server) to enable the x402 payment
 docker-compose up -d
 ```
 
-### Step 2: Access and Payment via openclaw Agent
+### Step 2: Run a Client
 
-Once the services are running, the **openclaw** agent can automatically detect the `402 Payment Required` challenge, sign the necessary permits, settle  the payment via the facilitator, and retrieve the resource for you.
+**Python CLI:**
+```bash
+./start.sh client
+```
 
-> Ensure the **openclaw** agent has the [openclaw-extension](https://github.com/BofAI/openclaw-extension) (a suite of tools and skills developed by BankOfAI to empower AI Agents with financial sovereignty) enabled to handle x402 protocol operations.
+**TypeScript CLI:**
+```bash
+./start.sh client-ts
+```
+
+### Step 3: Access via Openclaw Agent
+
+Once services are running, the **openclaw** agent can automatically detect the `402 Payment Required` challenge, sign the necessary permits, settle the payment via the facilitator, and retrieve the resource.
+
+> Ensure the **openclaw** agent has the [openclaw-extension](https://github.com/BofAI/openclaw-extension) enabled to handle x402 protocol operations.
 
 <img src="./assets/openclaw.jpg" alt="openclaw Agent" width="600">
+
+---
+
+## A2A Agent Demo
+
+The A2A (Agent-to-Agent) demo extends x402 with multi-agent orchestration using Google ADK:
+
+- **Merchant Agent** (`a2a-server`) — An LLM-powered agent (Gemini) that requires payment before fulfilling requests.
+- **Client Agent** (`a2a-client`) — A web UI where users interact with the Merchant Agent, signing payments locally via TronLink.
+
+### Running the A2A Demo
+
+```bash
+# Set GOOGLE_API_KEY in .env first
+
+# Start Merchant Agent (port 10000)
+./start.sh a2a-server
+
+# Start Client Agent UI (port 8080)
+./start.sh a2a-client
+```
+
+See [`a2a/README.md`](a2a/README.md) for detailed architecture and configuration.
+
+---
+
+## Project Structure
+
+```
+├── server/              # Protected resource server (FastAPI)
+├── facilitator/         # Payment processor (FastAPI)
+├── client/
+│   ├── python/          # Python CLI client
+│   ├── typescript/      # TypeScript CLI client
+│   └── web/             # React web client
+├── a2a/                 # Agent-to-agent demo (Google ADK)
+│   ├── server/          # Merchant agent
+│   └── client_agent/    # Client agent UI
+├── docker/              # Docker setup (supervisord)
+├── docker-compose.yml   # Containerized deployment
+├── start.sh             # Unified startup script
+└── .env.sample          # Environment variables template
+```
 
 ---
 
@@ -118,7 +195,8 @@ This project is open source under the **MIT License**. See the [LICENSE](LICENSE
 
 ## Additional Documentation
 
-- **System Architecture:** Explore inter-component communication in [ARCHITECTURE.md](ARCHITECTURE.md).
-- **Server Details:** Resource management info in [SERVER.md](SERVER.md).
-- **Facilitator Details:** Payment processing insights in [FACILITATOR.md](FACILITATOR.md).
-- **Client Details:** Instructions for CLI and web demo in [CLIENT.md](CLIENT.md).
+- **System Architecture:** [ARCHITECTURE.md](ARCHITECTURE.md)
+- **Server Details:** [SERVER.md](SERVER.md)
+- **Facilitator Details:** [FACILITATOR.md](FACILITATOR.md)
+- **Client Details:** [CLIENT.md](CLIENT.md)
+- **A2A Demo:** [a2a/README.md](a2a/README.md)
