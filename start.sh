@@ -7,6 +7,16 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
+PY_BIN="python"
+if [ -x "$SCRIPT_DIR/.venv/bin/python" ]; then
+    PY_BIN="$SCRIPT_DIR/.venv/bin/python"
+fi
+
+# Default agent-wallet secrets dir to repo-local .agent-wallet (if present)
+if [ -d "$SCRIPT_DIR/.agent-wallet" ] && [ -z "${AGENT_WALLET_SECRETS_DIR:-}" ]; then
+    export AGENT_WALLET_SECRETS_DIR="$SCRIPT_DIR/.agent-wallet"
+fi
+
 COMPONENT=$1
 
 if [ -z "$COMPONENT" ]; then
@@ -17,13 +27,14 @@ if [ -z "$COMPONENT" ]; then
     echo "  facilitator  - Payment facilitator service (Python/FastAPI)"
     echo "  client       - Payment client (Python)"
     echo "  client-ts    - Payment client (TypeScript)"
+    echo "  init-wallet  - Initialize agent-wallet test wallets from .env"
     echo "  a2a-server   - A2A Merchant Server"
     echo "  a2a-client   - A2A Client Agent Web UI"
     exit 1
 fi
 
 # Check if .env exists
-if [ ! -f ".env" ]; then
+if [ "$COMPONENT" != "init-wallet" ] && [ ! -f ".env" ]; then
     echo "❌ Error: .env file not found"
     echo ""
     echo "Please create .env file with:"
@@ -38,21 +49,21 @@ case "$COMPONENT" in
         echo "Starting X402 Protected Resource Server"
         echo "=========================================="
         cd server
-        python main.py
+        "$PY_BIN" main.py
         ;;
     facilitator)
         echo "=========================================="
         echo "Starting X402 Facilitator"
         echo "=========================================="
         cd facilitator
-        python main.py
+        "$PY_BIN" main.py
         ;;
     client)
         echo "=========================================="
         echo "Starting X402 Client (Python)"
         echo "=========================================="
         cd client/python
-        python main.py
+        "$PY_BIN" main.py
         ;;
     client-ts)
         echo "=========================================="
@@ -65,13 +76,23 @@ case "$COMPONENT" in
         fi
         npm start
         ;;
+    init-wallet)
+        echo "=========================================="
+        echo "Initializing Agent Wallets"
+        echo "=========================================="
+        if [ ! -f "scripts/init_agent_wallet.sh" ]; then
+            echo "❌ Error: scripts/init_agent_wallet.sh not found"
+            exit 1
+        fi
+        bash scripts/init_agent_wallet.sh
+        ;;
     a2a-server)
         echo "=========================================="
         echo "Starting A2A Merchant Server"
         echo "=========================================="
         cd a2a
         export SERVER_HOST="${SERVER_HOST:-0.0.0.0}"
-        export SERVER_PORT="${SERVER_PORT:-8000}"
+        export SERVER_PORT="${SERVER_PORT:-10000}"
         export TRON_NETWORK="${TRON_NETWORK:-tron:nile}"
         export FACILITATOR_URL="${FACILITATOR_URL:-https://facilitator.bankofai.io}"
         
@@ -102,7 +123,7 @@ case "$COMPONENT" in
         ;;
     *)
         echo "❌ Unknown component: $COMPONENT"
-        echo "Valid: server, facilitator, client, client-ts, a2a-server, a2a-client"
+        echo "Valid: server, facilitator, client, client-ts, init-wallet, a2a-server, a2a-client"
         exit 1
         ;;
 esac

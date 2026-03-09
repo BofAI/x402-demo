@@ -20,6 +20,7 @@ from bankofai.x402.mechanisms.tron.exact_permit import ExactPermitTronFacilitato
 from bankofai.x402.mechanisms.evm.exact_permit import ExactPermitEvmFacilitatorMechanism
 from bankofai.x402.mechanisms.evm.exact import ExactEvmFacilitatorMechanism
 from bankofai.x402.signers.facilitator import TronFacilitatorSigner, EvmFacilitatorSigner
+from bankofai.x402.wallet import AgentWalletAdapter
 from bankofai.x402.config import NetworkConfig
 from bankofai.x402.tokens import TokenRegistry
 from bankofai.x402.types import (
@@ -57,6 +58,14 @@ load_dotenv(Path(__file__).parent.parent / ".env")
 # Configuration
 TRON_PRIVATE_KEY = os.getenv("TRON_PRIVATE_KEY", "")
 BSC_PRIVATE_KEY = os.getenv("BSC_PRIVATE_KEY", "")
+SIGNER_INIT_MODE = os.getenv("SIGNER_INIT_MODE", "private_key").strip().lower()
+
+TRON_AGENT_WALLET_NAME = os.getenv("TRON_AGENT_WALLET_NAME", "")
+BSC_AGENT_WALLET_NAME = os.getenv("BSC_AGENT_WALLET_NAME", "")
+AGENT_WALLET_SECRETS_DIR = os.path.expanduser(
+    os.getenv("AGENT_WALLET_SECRETS_DIR", "~/.agent-wallet")
+)
+AGENT_WALLET_PASSWORD = os.getenv("AGENT_WALLET_PASSWORD", "")
 
 # Facilitator configuration
 FACILITATOR_HOST = "0.0.0.0"
@@ -77,10 +86,43 @@ BSC_MAINNET_BASE_FEE = {
     "EPS": 100_000_000_000_000,       # 0.0001 EPS (18 decimals on BSC mainnet)
 }
 
-if not TRON_PRIVATE_KEY:
-    raise ValueError("TRON_PRIVATE_KEY environment variable is required")
-if not BSC_PRIVATE_KEY:
-    raise ValueError("BSC_PRIVATE_KEY environment variable is required")
+if SIGNER_INIT_MODE not in {"private_key", "agent_wallet"}:
+    raise ValueError("SIGNER_INIT_MODE must be one of: private_key, agent_wallet")
+
+
+async def _create_agent_wallet_adapter(wallet_name: str) -> AgentWalletAdapter:
+    try:
+        from agent_wallet import WalletFactory
+    except ImportError as e:
+        raise ValueError(
+            "SIGNER_INIT_MODE=agent_wallet requires `agent-wallet` package. "
+            "Install it in your demo environment first."
+        ) from e
+
+    if not wallet_name:
+        raise ValueError("Agent wallet name is required when SIGNER_INIT_MODE=agent_wallet")
+    if not AGENT_WALLET_PASSWORD:
+        raise ValueError("AGENT_WALLET_PASSWORD is required when SIGNER_INIT_MODE=agent_wallet")
+
+    provider = WalletFactory(secrets_dir=AGENT_WALLET_SECRETS_DIR, password=AGENT_WALLET_PASSWORD)
+    agent_wallet = await provider.get_wallet(wallet_name)
+    return await AgentWalletAdapter.create(agent_wallet)
+
+
+if SIGNER_INIT_MODE == "private_key":
+    if not TRON_PRIVATE_KEY:
+        raise ValueError("TRON_PRIVATE_KEY environment variable is required")
+    if not BSC_PRIVATE_KEY:
+        raise ValueError("BSC_PRIVATE_KEY environment variable is required")
+
+    bsc_signer = EvmFacilitatorSigner.from_private_key(BSC_PRIVATE_KEY)
+    tron_signer_factory = lambda: TronFacilitatorSigner.from_private_key(TRON_PRIVATE_KEY)
+else:
+    bsc_wallet = asyncio.run(_create_agent_wallet_adapter(BSC_AGENT_WALLET_NAME))
+    tron_wallet = asyncio.run(_create_agent_wallet_adapter(TRON_AGENT_WALLET_NAME))
+
+    bsc_signer = EvmFacilitatorSigner.from_wallet(bsc_wallet)
+    tron_signer_factory = lambda: TronFacilitatorSigner.from_wallet(tron_wallet)
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -99,7 +141,6 @@ app.add_middleware(
 )
 
 # Get facilitator addresses
-bsc_signer = EvmFacilitatorSigner.from_private_key(BSC_PRIVATE_KEY)
 bsc_facilitator_address = bsc_signer.get_address()
 
 # Initialize X402Facilitator
@@ -107,7 +148,7 @@ facilitator = X402Facilitator()
 
 # Register TRON mechanisms
 for network in TRON_NETWORKS:
-    signer = TronFacilitatorSigner.from_private_key(TRON_PRIVATE_KEY)
+    signer = tron_signer_factory()
     mechanism = ExactPermitTronFacilitatorMechanism(
         signer,
         base_fee=TRON_BASE_FEE,
@@ -128,7 +169,7 @@ bsc_native_mechanism = ExactEvmFacilitatorMechanism(
 facilitator.register([NetworkConfig.BSC_TESTNET], bsc_native_mechanism)
 
 # Register BSC mainnet mechanisms (exact + exact)
-bsc_mainnet_signer = EvmFacilitatorSigner.from_private_key(BSC_PRIVATE_KEY)
+bsc_mainnet_signer = bsc_signer
 bsc_mainnet_facilitator_address = bsc_mainnet_signer.get_address()
 
 bsc_mainnet_exact_mechanism = ExactPermitEvmFacilitatorMechanism(
@@ -146,6 +187,7 @@ facilitator.register([NetworkConfig.BSC_MAINNET], bsc_mainnet_native_mechanism)
 print("=" * 80)
 print("X402 Payment Facilitator - Configuration")
 print("=" * 80)
+print(f"Signer Init Mode: {SIGNER_INIT_MODE}")
 print(f"BSC  Facilitator Address: {bsc_facilitator_address}")
 print(f"TRON Base Fee: {TRON_BASE_FEE}")
 print(f"BSC  Base Fee: {BSC_BASE_FEE}")

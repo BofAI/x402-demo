@@ -19,6 +19,7 @@ import {
   ExactEvmClientMechanism,
   TronClientSigner,
   EvmClientSigner,
+  AgentWalletAdapter,
   DefaultTokenSelectionStrategy,
   SufficientBalancePolicy,
   decodePaymentPayload,
@@ -34,6 +35,13 @@ config({ path: resolve(__dirname, '../../../.env') });
 
 const TRON_PRIVATE_KEY = process.env.TRON_PRIVATE_KEY ?? '';
 const BSC_PRIVATE_KEY  = process.env.BSC_PRIVATE_KEY ?? '';
+const SIGNER_INIT_MODE = (process.env.SIGNER_INIT_MODE ?? 'private_key').trim().toLowerCase();
+
+const TRON_AGENT_WALLET_NAME = process.env.TRON_AGENT_WALLET_NAME ?? '';
+const BSC_AGENT_WALLET_NAME = process.env.BSC_AGENT_WALLET_NAME ?? '';
+const AGENT_WALLET_SECRETS_DIR = process.env.AGENT_WALLET_SECRETS_DIR ?? '~/.agent-wallet';
+const AGENT_WALLET_PASSWORD = process.env.AGENT_WALLET_PASSWORD ?? '';
+
 const SERVER_URL       = process.env.SERVER_URL ?? 'http://localhost:8000';
 // For TRON mainnet, set TRON_GRID_API_KEY in .env — the signer reads it from env automatically.
 
@@ -45,12 +53,8 @@ const SERVER_URL       = process.env.SERVER_URL ?? 'http://localhost:8000';
 const ENDPOINT         = '/protected-bsc-testnet';
 
 
-if (!TRON_PRIVATE_KEY) {
-  console.error('Error: TRON_PRIVATE_KEY not set in .env');
-  process.exit(1);
-}
-if (!BSC_PRIVATE_KEY) {
-  console.error('Error: BSC_PRIVATE_KEY not set in .env');
+if (!['private_key', 'agent_wallet'].includes(SIGNER_INIT_MODE)) {
+  console.error('Error: SIGNER_INIT_MODE must be one of: private_key, agent_wallet');
   process.exit(1);
 }
 
@@ -85,14 +89,55 @@ async function saveImage(response: Response): Promise<string> {
 
 async function main(): Promise<void> {
   // --- Create signers for every chain family ---
-  const tronSigner = new TronClientSigner(TRON_PRIVATE_KEY);
-  const evmSigner  = new EvmClientSigner(BSC_PRIVATE_KEY);
+  let tronSigner: TronClientSigner;
+  let evmSigner: EvmClientSigner;
+
+  if (SIGNER_INIT_MODE === 'private_key') {
+    if (!TRON_PRIVATE_KEY) {
+      console.error('Error: TRON_PRIVATE_KEY not set in .env');
+      process.exit(1);
+    }
+    if (!BSC_PRIVATE_KEY) {
+      console.error('Error: BSC_PRIVATE_KEY not set in .env');
+      process.exit(1);
+    }
+
+    tronSigner = TronClientSigner.fromPrivateKey(TRON_PRIVATE_KEY);
+    evmSigner = EvmClientSigner.fromPrivateKey(BSC_PRIVATE_KEY);
+  } else {
+    if (!TRON_AGENT_WALLET_NAME || !BSC_AGENT_WALLET_NAME) {
+      throw new Error('TRON_AGENT_WALLET_NAME and BSC_AGENT_WALLET_NAME are required for SIGNER_INIT_MODE=agent_wallet');
+    }
+    if (!AGENT_WALLET_PASSWORD) {
+      throw new Error('AGENT_WALLET_PASSWORD is required for SIGNER_INIT_MODE=agent_wallet');
+    }
+
+    let WalletFactory: any;
+    try {
+      ({ WalletFactory } = await import('@bankofai/agent-wallet'));
+    } catch {
+      throw new Error('SIGNER_INIT_MODE=agent_wallet requires `@bankofai/agent-wallet` package in this client environment');
+    }
+
+    const provider = WalletFactory({
+      secretsDir: AGENT_WALLET_SECRETS_DIR,
+      password: AGENT_WALLET_PASSWORD,
+    });
+    const tronAgentWallet = await provider.getWallet(TRON_AGENT_WALLET_NAME);
+    const evmAgentWallet = await provider.getWallet(BSC_AGENT_WALLET_NAME);
+
+    const tronWallet = await AgentWalletAdapter.create(tronAgentWallet);
+    const evmWallet = await AgentWalletAdapter.create(evmAgentWallet);
+    tronSigner = TronClientSigner.fromWallet(tronWallet);
+    evmSigner = EvmClientSigner.fromWallet(evmWallet);
+  }
 
   hr();
   console.log('X402 Client (TypeScript · Multi-Network)');
   hr();
   console.log(`  TRON Address : ${tronSigner.getAddress()}`);
   console.log(`  EVM  Address : ${evmSigner.getAddress()}`);
+  console.log(`  Init Mode    : ${SIGNER_INIT_MODE}`);
   console.log(`  Resource     : ${SERVER_URL}${ENDPOINT}`);
   hr();
 
