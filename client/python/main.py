@@ -25,6 +25,7 @@ from bankofai.x402.mechanisms.evm.exact_permit import ExactPermitEvmClientMechan
 from bankofai.x402.mechanisms.evm.exact import ExactEvmClientMechanism
 from bankofai.x402.signers.client import TronClientSigner, EvmClientSigner
 from bankofai.x402.tokens import TokenRegistry
+from bankofai.x402.wallet import AgentWalletAdapter
 from bankofai.x402.types import PaymentRequirements
 
 # Custom policy to prefer exact_gasfree USDT
@@ -52,6 +53,14 @@ load_dotenv()
 # Configuration
 TRON_PRIVATE_KEY = os.getenv("TRON_PRIVATE_KEY", "")
 BSC_PRIVATE_KEY = os.getenv("BSC_PRIVATE_KEY", "")
+SIGNER_INIT_MODE = os.getenv("SIGNER_INIT_MODE", "private_key").strip().lower()
+
+TRON_AGENT_WALLET_NAME = os.getenv("TRON_AGENT_WALLET_NAME", "")
+BSC_AGENT_WALLET_NAME = os.getenv("BSC_AGENT_WALLET_NAME", "")
+AGENT_WALLET_SECRETS_DIR = os.path.expanduser(
+    os.getenv("AGENT_WALLET_SECRETS_DIR", "~/.agent-wallet")
+)
+AGENT_WALLET_PASSWORD = os.getenv("AGENT_WALLET_PASSWORD", "")
 
 # Server configuration
 # Change ENDPOINT_PATH to target a different server resource.
@@ -65,18 +74,47 @@ RESOURCE_URL = RESOURCE_SERVER_URL + ENDPOINT_PATH
 HTTP_TIMEOUT_SECONDS = float(os.getenv("HTTP_TIMEOUT_SECONDS", "60"))
 
 
-if not TRON_PRIVATE_KEY:
-    print("\n❌ Error: TRON_PRIVATE_KEY not set in .env file")
-    print("\nPlease add your TRON private key to .env file\n")
+if SIGNER_INIT_MODE not in {"private_key", "agent_wallet"}:
+    print("\n❌ Error: SIGNER_INIT_MODE must be one of: private_key, agent_wallet\n")
     exit(1)
 
+async def _create_agent_wallet_adapter(wallet_name: str) -> AgentWalletAdapter:
+    try:
+        from agent_wallet import WalletFactory
+    except ImportError:
+        print("\n❌ Error: SIGNER_INIT_MODE=agent_wallet requires `agent-wallet` package.\n")
+        raise
+
+    if not wallet_name:
+        raise ValueError("Agent wallet name is required when SIGNER_INIT_MODE=agent_wallet")
+    if not AGENT_WALLET_PASSWORD:
+        raise ValueError("AGENT_WALLET_PASSWORD is required when SIGNER_INIT_MODE=agent_wallet")
+
+    provider = WalletFactory(secrets_dir=AGENT_WALLET_SECRETS_DIR, password=AGENT_WALLET_PASSWORD)
+    agent_wallet = await provider.get_wallet(wallet_name)
+    return await AgentWalletAdapter.create(agent_wallet)
 async def main():
     print("=" * 80)
     print("X402 Payment Client (Multi-Network)")
     print("=" * 80)
 
     # --- Create signers for every chain family ---
-    tron_signer = TronClientSigner.from_private_key(TRON_PRIVATE_KEY)
+    evm_signer = None
+    if SIGNER_INIT_MODE == "private_key":
+        if not TRON_PRIVATE_KEY:
+            print("\n❌ Error: TRON_PRIVATE_KEY not set in .env file")
+            print("\nPlease add your TRON private key to .env file\n")
+            exit(1)
+
+        tron_signer = TronClientSigner.from_private_key(TRON_PRIVATE_KEY)
+        if BSC_PRIVATE_KEY:
+            evm_signer = EvmClientSigner.from_private_key(BSC_PRIVATE_KEY)
+    else:
+        tron_wallet = await _create_agent_wallet_adapter(TRON_AGENT_WALLET_NAME)
+        tron_signer = TronClientSigner.from_wallet(tron_wallet)
+        if BSC_AGENT_WALLET_NAME:
+            evm_wallet = await _create_agent_wallet_adapter(BSC_AGENT_WALLET_NAME)
+            evm_signer = EvmClientSigner.from_wallet(evm_wallet)
 
     # Initialize GasFree API clients
     gasfree_clients = {
@@ -89,8 +127,7 @@ async def main():
     x402_client = X402Client()
     x402_client.register("tron:*", ExactPermitTronClientMechanism(tron_signer))
     x402_client.register("tron:*", ExactGasFreeClientMechanism(tron_signer, clients=gasfree_clients))
-    if BSC_PRIVATE_KEY:
-        evm_signer = EvmClientSigner.from_private_key(BSC_PRIVATE_KEY)
+    if evm_signer:
         for bsc_network in [NetworkConfig.BSC_TESTNET, NetworkConfig.BSC_MAINNET]:
             x402_client.register(bsc_network, ExactPermitEvmClientMechanism(evm_signer))
             x402_client.register(bsc_network, ExactEvmClientMechanism(evm_signer))
@@ -101,7 +138,8 @@ async def main():
     x402_client.register_policy(PreferGasFreeUSDTPolicy)
 
     print(f"TRON Address: {tron_signer.get_address()}")
-    if BSC_PRIVATE_KEY:
+    print(f"Signer Init Mode: {SIGNER_INIT_MODE}")
+    if evm_signer:
         print(f"EVM  Address: {evm_signer.get_address()}")
     else:
         print("EVM: not configured (BSC_PRIVATE_KEY not set)")
