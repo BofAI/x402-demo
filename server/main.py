@@ -61,10 +61,10 @@ if not PAY_TO_ADDRESS:
 CURRENT_NETWORK = NetworkConfig.TRON_NILE
 
 # Server configuration
-FACILITATOR_URL = os.getenv("FACILITATOR_URL", "http://localhost:8001")
+FACILITATOR_URL = os.getenv("FACILITATOR_URL", "http://localhost:8011")
 FACILITATOR_API_KEY = os.getenv("FACILITATOR_API_KEY", "")  # Optional: for facilitator auth
 SERVER_HOST = "0.0.0.0"
-SERVER_PORT = 8000
+SERVER_PORT = 8010
 
 # Path to protected image
 PROTECTED_IMAGE_PATH = Path(__file__).parent / "protected.png"
@@ -76,12 +76,6 @@ _request_count = 0
 server = X402Server()
 # Register TRON GasFree mechanism
 server.register(NetworkConfig.TRON_NILE, ExactGasFreeServerMechanism())
-# Register BSC mechanisms (optional - requires BSC_PAY_TO_ADDRESS)
-if BSC_PAY_TO_ADDRESS:
-    server.register(NetworkConfig.BSC_TESTNET, ExactPermitEvmServerMechanism())
-    server.register(NetworkConfig.BSC_TESTNET, ExactEvmServerMechanism())
-    server.register(NetworkConfig.BSC_MAINNET, ExactPermitEvmServerMechanism())
-    server.register(NetworkConfig.BSC_MAINNET, ExactEvmServerMechanism())
 # Add facilitator (with X-API-KEY if configured)
 facilitator_headers = {"X-API-KEY": FACILITATOR_API_KEY} if FACILITATOR_API_KEY else None
 facilitator = FacilitatorClient(
@@ -191,102 +185,6 @@ async def protected_endpoint(request: Request):
     return StreamingResponse(buf, media_type="image/png")
 
 
-@app.get("/protected-shasta")
-@x402_protected(
-    server=server,
-    prices=["0.0001 USDT"],
-    schemes=["exact_permit"],
-    network=NetworkConfig.TRON_SHASTA,
-    pay_to=PAY_TO_ADDRESS,
-)
-async def protected_shasta_endpoint(request: Request):
-    """Serve the protected image (shasta payment) - generated dynamically"""
-    global _request_count
-    if not PROTECTED_IMAGE_PATH.exists():
-        return {"error": "Protected image not found"}
-
-    with _request_count_lock:
-        _request_count += 1
-        request_count = _request_count
-
-    buf = generate_protected_image(
-        f"shasta req: {request_count}", text_color=(0, 255, 0, 255)
-    )
-    return StreamingResponse(buf, media_type="image/png")
-
-
-@app.get("/protected-mainnet")
-@x402_protected(
-    server=server,
-    prices=["0.0001 USDT", "0.0001 USDD"],
-    schemes=["exact_permit", "exact_permit"],
-    network=NetworkConfig.TRON_MAINNET,
-    pay_to=PAY_TO_ADDRESS,
-)
-async def protected_mainnet_endpoint(request: Request):
-    """Serve the protected image (mainnet payment) - generated dynamically"""
-    global _request_count
-    if not PROTECTED_IMAGE_PATH.exists():
-        return {"error": "Protected image not found"}
-
-    with _request_count_lock:
-        _request_count += 1
-        request_count = _request_count
-
-    buf = generate_protected_image(
-        f"mainnet req: {request_count}", text_color=(255, 0, 0, 255)
-    )
-    return StreamingResponse(buf, media_type="image/png")
-
-
-if BSC_PAY_TO_ADDRESS:
-
-    @app.get("/protected-bsc-mainnet")
-    @x402_protected(
-        server=server,
-        prices=["0.0001 USDC", "0.0001 USDT", "0.0001 EPS"],
-        network=NetworkConfig.BSC_MAINNET,
-        pay_to=BSC_PAY_TO_ADDRESS,
-        schemes=["exact_permit", "exact_permit", "exact_permit"],
-    )
-    async def protected_bsc_mainnet_endpoint(request: Request):
-        """Serve the protected image (BSC mainnet payment) - generated dynamically"""
-        global _request_count
-        if not PROTECTED_IMAGE_PATH.exists():
-            return {"error": "Protected image not found"}
-
-        with _request_count_lock:
-            _request_count += 1
-            request_count = _request_count
-
-        buf = generate_protected_image(
-            f"bsc-mainnet req: {request_count}", text_color=(255, 165, 0, 255)
-        )
-        return StreamingResponse(buf, media_type="image/png")
-
-    @app.get("/protected-bsc-testnet")
-    @x402_protected(
-        server=server,
-        prices=["0.0001 USDT", "0.0001 USDC", "0.0001 DHLU"],
-        network=NetworkConfig.BSC_TESTNET,
-        pay_to=BSC_PAY_TO_ADDRESS,
-        schemes=["exact_permit", "exact_permit", "exact"],
-    )
-    async def protected_bsc_testnet_endpoint(request: Request):
-        """Serve the protected image (BSC testnet payment) - generated dynamically"""
-        global _request_count
-        if not PROTECTED_IMAGE_PATH.exists():
-            return {"error": "Protected image not found"}
-
-        with _request_count_lock:
-            _request_count += 1
-            request_count = _request_count
-
-        buf = generate_protected_image(
-            f"bsc-test req: {request_count}", text_color=(0, 200, 255, 255)
-        )
-        return StreamingResponse(buf, media_type="image/png")
-
 
 if __name__ == "__main__":
     import uvicorn
@@ -298,10 +196,6 @@ if __name__ == "__main__":
     print(f"Port: {SERVER_PORT}")
     print("Endpoints:")
     print("  /protected-nile         - Payment (0.0001 USDT) [Nile testnet]")
-    print("  /protected-shasta       - Payment (0.0001 USDT) [Shasta testnet]")
-    print("  /protected-mainnet      - Payment (0.0001 USDT/USDD) [Mainnet]")
-    print("  /protected-bsc-mainnet  - Payment (0.0001 USDC/USDT/EPS) [BSC Mainnet]")
-    print("  /protected-bsc-testnet  - Payment (0.0001 USDT/USDC/DHLU) [BSC Testnet]")
     print("=" * 80 + "\n")
 
     uvicorn.run(

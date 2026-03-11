@@ -9,6 +9,15 @@ cd "$SCRIPT_DIR"
 
 COMPONENT=$1
 
+ensure_ts_demo_deps() {
+    if [ -x "node_modules/.bin/tsx" ] && [ -d "node_modules/@bankofai/x402-core" ] && [ -d "node_modules/@bankofai/x402-tron" ] && [ -d "node_modules/@bankofai/x402-evm" ]; then
+        return
+    fi
+
+    echo "Bootstrapping local SDK packages for x402-demo..."
+    bash ./scripts/bootstrap-local-sdk.sh
+}
+
 if [ -z "$COMPONENT" ]; then
     echo "Usage: ./start.sh <component>"
     echo ""
@@ -16,7 +25,10 @@ if [ -z "$COMPONENT" ]; then
     echo "  server       - Protected resource server (Python/FastAPI)"
     echo "  facilitator  - Payment facilitator service (Python/FastAPI)"
     echo "  client       - Payment client (Python)"
-    echo "  client-ts    - Payment client (TypeScript)"
+    echo "  client-ts    - Payment client (TypeScript, deprecated SDK)"
+    echo "  ts-server    - Protected resource server (TypeScript/Express, new SDK)"
+    echo "  ts-facilitator - Payment facilitator (TypeScript/Express, new SDK)"
+    echo "  ts-client    - Payment client (TypeScript, new SDK)"
     echo "  a2a-server   - A2A Merchant Server"
     echo "  a2a-client   - A2A Client Agent Web UI"
     exit 1
@@ -26,8 +38,9 @@ fi
 if [ ! -f ".env" ]; then
     echo "❌ Error: .env file not found"
     echo ""
-    echo "Please create .env file with:"
-    echo "  TRON_PRIVATE_KEY=your_private_key"
+    echo "Please copy .env.sample to .env and fill in:"
+    echo "  TRON_CLIENT_PRIVATE_KEY=your_nile_client_private_key"
+    echo "  TRON_FACILITATOR_PRIVATE_KEY=your_nile_facilitator_private_key"
     echo "  PAY_TO_ADDRESS=your_tron_address"
     exit 1
 fi
@@ -65,13 +78,37 @@ case "$COMPONENT" in
         fi
         npm start
         ;;
+    ts-server)
+        echo "=========================================="
+        echo "Starting X402 Server (TypeScript / New SDK)"
+        echo "=========================================="
+        echo "Network: TRON Nile"
+        ensure_ts_demo_deps
+        npx tsx ts/server.ts
+        ;;
+    ts-facilitator)
+        echo "=========================================="
+        echo "Starting X402 Facilitator (TypeScript / New SDK)"
+        echo "=========================================="
+        echo "Network: TRON Nile"
+        ensure_ts_demo_deps
+        npx tsx ts/facilitator.ts
+        ;;
+    ts-client)
+        echo "=========================================="
+        echo "Starting X402 Client (TypeScript / New SDK)"
+        echo "=========================================="
+        echo "Network: TRON Nile"
+        ensure_ts_demo_deps
+        npx tsx ts/client.ts
+        ;;
     a2a-server)
         echo "=========================================="
         echo "Starting A2A Merchant Server"
         echo "=========================================="
         cd a2a
         export SERVER_HOST="${SERVER_HOST:-0.0.0.0}"
-        export SERVER_PORT="${SERVER_PORT:-8000}"
+        export SERVER_PORT="${SERVER_PORT:-8010}"
         export TRON_NETWORK="${TRON_NETWORK:-tron:nile}"
         export FACILITATOR_URL="${FACILITATOR_URL:-https://facilitator.bankofai.io}"
         
@@ -102,7 +139,7 @@ case "$COMPONENT" in
         ;;
     *)
         echo "❌ Unknown component: $COMPONENT"
-        echo "Valid: server, facilitator, client, client-ts, a2a-server, a2a-client"
+        echo "Valid: server, facilitator, client, client-ts, ts-server, ts-facilitator, ts-client, a2a-server, a2a-client"
         exit 1
         ;;
 esac

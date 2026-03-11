@@ -63,9 +63,9 @@ BSC_PRIVATE_KEY = os.getenv("BSC_PRIVATE_KEY", "")
 
 # Facilitator configuration
 FACILITATOR_HOST = "0.0.0.0"
-FACILITATOR_PORT = 8001
+FACILITATOR_PORT = 8011
 # TRON supported networks
-TRON_NETWORKS = ["mainnet", "shasta", "nile"]
+TRON_NETWORKS = ["nile"]
 
 # Fee config per token (smallest unit)
 TRON_BASE_FEE = {
@@ -125,45 +125,12 @@ for network in TRON_NETWORKS:
         )
         facilitator.register([f"tron:{network}"], gasfree_mechanism)
 
-# Register BSC mechanisms (optional - requires BSC_PRIVATE_KEY)
-if BSC_PRIVATE_KEY:
-    bsc_signer = EvmFacilitatorSigner.from_private_key(BSC_PRIVATE_KEY)
-    bsc_facilitator_address = bsc_signer.get_address()
-
-    bsc_exact_mechanism = ExactPermitEvmFacilitatorMechanism(
-        bsc_signer,
-        fee_to=bsc_facilitator_address,
-        base_fee=BSC_BASE_FEE,
-    )
-    facilitator.register([NetworkConfig.BSC_TESTNET], bsc_exact_mechanism)
-
-    bsc_native_mechanism = ExactEvmFacilitatorMechanism(bsc_signer)
-    facilitator.register([NetworkConfig.BSC_TESTNET], bsc_native_mechanism)
-
-    bsc_mainnet_signer = EvmFacilitatorSigner.from_private_key(BSC_PRIVATE_KEY)
-    bsc_mainnet_facilitator_address = bsc_mainnet_signer.get_address()
-
-    bsc_mainnet_exact_mechanism = ExactPermitEvmFacilitatorMechanism(
-        bsc_mainnet_signer,
-        fee_to=bsc_mainnet_facilitator_address,
-        base_fee=BSC_MAINNET_BASE_FEE,
-    )
-    facilitator.register([NetworkConfig.BSC_MAINNET], bsc_mainnet_exact_mechanism)
-
-    bsc_mainnet_native_mechanism = ExactEvmFacilitatorMechanism(bsc_mainnet_signer)
-    facilitator.register([NetworkConfig.BSC_MAINNET], bsc_mainnet_native_mechanism)
-
 print("=" * 80)
 print("X402 Payment Facilitator - Configuration")
 print("=" * 80)
-if BSC_PRIVATE_KEY:
-    print(f"BSC  Facilitator Address: {bsc_facilitator_address}")
-    print(f"BSC  Base Fee: {BSC_BASE_FEE}")
-else:
-    print("BSC: not configured (BSC_PRIVATE_KEY not set)")
 print(f"TRON Base Fee: {TRON_BASE_FEE}")
 
-all_networks = [f"tron:{n}" for n in TRON_NETWORKS] + [NetworkConfig.BSC_MAINNET, NetworkConfig.BSC_TESTNET]
+all_networks = [f"tron:{n}" for n in TRON_NETWORKS]
 print(f"Supported Networks: {', '.join(all_networks)}")
 
 print(f"\nNetwork Details:")
