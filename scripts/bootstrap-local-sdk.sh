@@ -61,6 +61,7 @@ pack_local_sdk "core" "core"
 pack_local_sdk "extensions" "extensions"
 pack_local_sdk "mechanisms/tron" "tron"
 pack_local_sdk "mechanisms/evm" "evm"
+pack_local_sdk "mcp" "mcp"
 
 echo "[bootstrap] Installing demo runtime dependencies..."
 cd "$DEMO_DIR"
@@ -69,8 +70,10 @@ npm install --no-save --no-package-lock \
   cors@^2.8.5 \
   dotenv@^16.4.5 \
   express@^4.21.0 \
+  @modelcontextprotocol/sdk@^1.12.1 \
   tronweb@^6.0.0 \
   viem@^2.45.2 \
+  zod@^3.24.2 \
   @types/cors@^2.8.17 \
   @types/express@^5.0.0 \
   @types/node@^22.0.0 \
@@ -79,6 +82,7 @@ npm install --no-save --no-package-lock \
   "$TMP_DIR/stage/core"/*.tgz \
   "$TMP_DIR/stage/extensions"/*.tgz \
   "$TMP_DIR/stage/tron"/*.tgz \
-  "$TMP_DIR/stage/evm"/*.tgz
+  "$TMP_DIR/stage/evm"/*.tgz \
+  "$TMP_DIR/stage/mcp"/*.tgz
 
 echo "[bootstrap] Done. Local SDK packages are installed into x402-demo/node_modules."

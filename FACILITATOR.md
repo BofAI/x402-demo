@@ -2,65 +2,67 @@
 
 ## Overview
 
-The **Facilitator Module** handles payment validation and transaction settlement within the X402-Tron Demo. It acts as a trusted intermediary between the Resource Server and the TRON blockchain.
+The TypeScript facilitator in [`ts/facilitator.ts`](./ts/facilitator.ts) verifies payment payloads
+and settles them on-chain for the demo.
 
-### Deployment Options
-Developers have two choices for integrating a Facilitator:
-1. **Custom Facilitator:** You can build and host your own Facilitator using the provided implementation in this repository.
-2. **Official Facilitator:** Use the official X402 Facilitator service for managed settlement.
-   - **Official Address:** *Coming soon...*
+The default path is `tron:nile exact`. If BSC env vars are present, the same facilitator also
+registers `eip155:97 exact`.
 
----
+## Supported Networks
 
-## Features
+- `tron:nile`
+- `eip155:97` when BSC testnet configuration is provided
 
-- **Permit Verification:** Validates payment requests signed by clients.
-- **Transaction Settlement:** Executes TRON blockchain transactions.
+## Environment Variables
 
----
+Required TRON configuration:
 
-## Configuration
-
-### Environment Variables
-1. **TRON_PRIVATE_KEY:** Used for blockchain interactions.
-2. **FACILITATOR_URL:** Endpoint for permit submission.
-
-Example `.env` configuration:
 ```env
-TRON_PRIVATE_KEY=<private_key>
-FACILITATOR_URL=http://localhost:8001
+TRON_FACILITATOR_PRIVATE_KEY=<your_nile_facilitator_private_key>
+FACILITATOR_PORT=8011
 ```
 
----
+Optional BSC configuration:
+
+```env
+BSC_FACILITATOR_PRIVATE_KEY=<your_bsc_testnet_facilitator_private_key>
+BSC_TESTNET_RPC_URL=<your_bsc_testnet_rpc>
+```
+
+Optional retry tuning used by both the demo server and MCP server:
+
+```env
+FACILITATOR_RETRY_MS=3000
+```
 
 ## API Endpoints
 
-| Endpoint       | Method | Description                                |
-|----------------|--------|--------------------------------------------|
-| `/`            | `GET`  | Health check and system information.      |
-| `/verify`      | `POST` | Verifies signed permits.                  |
-| `/settle`      | `POST` | Confirms and processes blockchain payments.
+| Endpoint | Method | Description |
+| --- | --- | --- |
+| `/` | `GET` | Health check |
+| `/supported` | `GET` | Advertised supported schemes and networks |
+| `/verify` | `POST` | Verifies a payment payload against requirements |
+| `/settle` | `POST` | Settles a verified payment on-chain |
 
-**Example Request**:
+## Usage
+
 ```bash
-curl -X POST http://localhost:8001/settle -d '{"permit": {...}}'
+./start.sh ts-facilitator
 ```
 
----
+The facilitator logs each verify/settle step and prints the settlement transaction hash when
+successful.
+
+## Operational Notes
+
+- BSC settlement submissions are serialized in-process to avoid nonce collisions from concurrent
+  requests.
+- The facilitator must have chain-native gas funds:
+  - TRON facilitator: TRX
+  - BSC facilitator: testnet BNB
 
 ## Troubleshooting
 
-1. **Invalid Permit Structure:**
-   - Ensure permit follows TIP-712 standards.
-
-2. **Fee Inaccuracy:**
-   - Reconfigure `BASE_FEE` to match network conditions.
-
-3. **Network Timeout:**
-   - Increase `HTTP_TIMEOUT_SECONDS` in settings.
-
-4. **Service Downtime:**
-   - Restart using Docker Compose:
-     ```bash
-     docker-compose restart facilitator
-     ```
+- If `/supported` is empty or missing BSC, verify the optional BSC env vars are filled.
+- If settlement fails on BSC, first check RPC stability and facilitator gas balance.
+- If TRON requests fail under rate limits, set `TRON_GRID_API_KEY`.

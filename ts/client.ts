@@ -9,7 +9,12 @@ import "dotenv/config";
 import { TronWeb } from "tronweb";
 import { x402Client } from "@bankofai/x402-core/client";
 import { safeBase64Decode } from "@bankofai/x402-core/utils";
+import { toClientEvmSigner } from "@bankofai/x402-evm";
+import { ExactEvmScheme } from "@bankofai/x402-evm/exact/client";
 import { ExactTronScheme } from "@bankofai/x402-tron/exact/client";
+import { createPublicClient, http } from "viem";
+import { bscTestnet } from "viem/chains";
+import { privateKeyToAccount } from "viem/accounts";
 import { createClientTronSigner } from "./signers.js";
 
 // ---------------------------------------------------------------------------
@@ -25,6 +30,9 @@ if (!TRON_PRIVATE_KEY) {
 const SERVER_URL = process.env.SERVER_URL ?? "http://localhost:8010";
 const ENDPOINT = process.env.ENDPOINT ?? "/protected-nile";
 const TRON_GRID_API_KEY = process.env.TRON_GRID_API_KEY ?? "";
+const BSC_CLIENT_PRIVATE_KEY = process.env.BSC_CLIENT_PRIVATE_KEY;
+const BSC_TESTNET_RPC_URL = process.env.BSC_TESTNET_RPC_URL;
+const PREFERRED_NETWORK = process.env.PREFERRED_NETWORK;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -32,12 +40,35 @@ const TRON_GRID_API_KEY = process.env.TRON_GRID_API_KEY ?? "";
 
 const hr = () => console.log("─".repeat(60));
 
+function normalizeHexPrivateKey(privateKey: string): `0x${string}` {
+  return (privateKey.startsWith("0x") ? privateKey : `0x${privateKey}`) as `0x${string}`;
+}
+
 function decodeBase64Json<T = any>(encoded: string): T {
   return JSON.parse(safeBase64Decode(encoded)) as T;
 }
 
 function encodeBase64Json(obj: unknown): string {
   return Buffer.from(JSON.stringify(obj)).toString("base64");
+}
+
+function selectPaymentRequirements(preferredNetwork?: string) {
+  return (_x402Version: number, accepts: any[]) => {
+    if (!accepts.length) {
+      throw new Error("No payment requirements available");
+    }
+
+    if (preferredNetwork) {
+      const preferred = accepts.find((req) => req.network === preferredNetwork);
+      if (preferred) {
+        return preferred;
+      }
+
+      console.warn(`Preferred network ${preferredNetwork} not found in accepts; falling back to first option.`);
+    }
+
+    return accepts[0];
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -59,12 +90,27 @@ async function main() {
   console.log("X402 Client (TypeScript · New SDK)");
   hr();
   console.log(`  TRON Address: ${signer.address}`);
+  if (BSC_CLIENT_PRIVATE_KEY && BSC_TESTNET_RPC_URL) {
+    const evmAccount = privateKeyToAccount(normalizeHexPrivateKey(BSC_CLIENT_PRIVATE_KEY));
+    console.log(`  BSC Address:  ${evmAccount.address}`);
+  }
+  if (PREFERRED_NETWORK) {
+    console.log(`  Preferred:    ${PREFERRED_NETWORK}`);
+  }
   console.log(`  Target:       ${SERVER_URL}${ENDPOINT}`);
   hr();
 
   // Initialize x402 client
-  const client = new x402Client();
+  const client = new x402Client(selectPaymentRequirements(PREFERRED_NETWORK));
   client.register("tron:*", new ExactTronScheme(signer));
+  if (BSC_CLIENT_PRIVATE_KEY && BSC_TESTNET_RPC_URL) {
+    const evmAccount = privateKeyToAccount(normalizeHexPrivateKey(BSC_CLIENT_PRIVATE_KEY));
+    const publicClient = createPublicClient({
+      chain: bscTestnet,
+      transport: http(BSC_TESTNET_RPC_URL),
+    });
+    client.register("eip155:*", new ExactEvmScheme(toClientEvmSigner(evmAccount, publicClient)));
+  }
 
   const url = `${SERVER_URL}${ENDPOINT}`;
   console.log(`\nGET ${url} ...`);

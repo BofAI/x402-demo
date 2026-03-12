@@ -1,8 +1,8 @@
 #!/bin/bash
 set -e
 
-# X402 TRON Demo - Unified Startup Script
-# Usage: ./start.sh [server|facilitator|client|client-ts]
+# X402 Demo - Unified Startup Script
+# Usage: ./start.sh <component>
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
@@ -29,6 +29,8 @@ if [ -z "$COMPONENT" ]; then
     echo "  ts-server    - Protected resource server (TypeScript/Express, new SDK)"
     echo "  ts-facilitator - Payment facilitator (TypeScript/Express, new SDK)"
     echo "  ts-client    - Payment client (TypeScript, new SDK)"
+    echo "  ts-mcp-server - MCP server (TypeScript/SSE, new SDK)"
+    echo "  ts-mcp-client - MCP client (TypeScript/SSE, new SDK)"
     echo "  a2a-server   - A2A Merchant Server"
     echo "  a2a-client   - A2A Client Agent Web UI"
     exit 1
@@ -82,7 +84,7 @@ case "$COMPONENT" in
         echo "=========================================="
         echo "Starting X402 Server (TypeScript / New SDK)"
         echo "=========================================="
-        echo "Network: TRON Nile"
+        echo "Networks: TRON Nile (+ optional BSC Testnet)"
         ensure_ts_demo_deps
         npx tsx ts/server.ts
         ;;
@@ -90,7 +92,7 @@ case "$COMPONENT" in
         echo "=========================================="
         echo "Starting X402 Facilitator (TypeScript / New SDK)"
         echo "=========================================="
-        echo "Network: TRON Nile"
+        echo "Networks: TRON Nile (+ optional BSC Testnet)"
         ensure_ts_demo_deps
         npx tsx ts/facilitator.ts
         ;;
@@ -98,9 +100,25 @@ case "$COMPONENT" in
         echo "=========================================="
         echo "Starting X402 Client (TypeScript / New SDK)"
         echo "=========================================="
-        echo "Network: TRON Nile"
+        echo "Networks: TRON Nile (+ optional BSC Testnet)"
         ensure_ts_demo_deps
         npx tsx ts/client.ts
+        ;;
+    ts-mcp-server)
+        echo "=========================================="
+        echo "Starting X402 MCP Server (TypeScript / New SDK)"
+        echo "=========================================="
+        echo "Network: TRON Nile"
+        ensure_ts_demo_deps
+        npx tsx ts/mcp-server.ts
+        ;;
+    ts-mcp-client)
+        echo "=========================================="
+        echo "Starting X402 MCP Client (TypeScript / New SDK)"
+        echo "=========================================="
+        echo "Network: TRON Nile"
+        ensure_ts_demo_deps
+        npx tsx ts/mcp-client.ts
         ;;
     a2a-server)
         echo "=========================================="
@@ -139,7 +157,7 @@ case "$COMPONENT" in
         ;;
     *)
         echo "❌ Unknown component: $COMPONENT"
-        echo "Valid: server, facilitator, client, client-ts, ts-server, ts-facilitator, ts-client, a2a-server, a2a-client"
+        echo "Valid: server, facilitator, client, client-ts, ts-server, ts-facilitator, ts-client, ts-mcp-server, ts-mcp-client, a2a-server, a2a-client"
         exit 1
         ;;
 esac

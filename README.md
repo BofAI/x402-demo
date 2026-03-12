@@ -2,7 +2,14 @@
 
 ## Overview
 
-The **X402 Demo** provides a practical demonstration of integrating the **x402 payment protocol** with TRON. The current TypeScript demo is scoped to **TRON Nile** and uses the new SDK stack (`x402-core`, `x402-fetch`, `x402-tron`).
+The **X402 Demo** provides a practical demonstration of integrating the **x402 payment protocol** with TRON and BSC. The primary accepted path remains the **TypeScript v2 demo on TRON Nile**, and the same app can optionally expose a **BSC testnet** endpoint using the new SDK stack:
+
+- `@bankofai/x402-core`
+- `@bankofai/x402-tron`
+- `@bankofai/x402-evm`
+- `@bankofai/x402-mcp`
+
+Legacy Python, old TypeScript client examples, and broader A2A experiments remain in the repository, but they are not part of the current TypeScript acceptance path.
 
 ### Payment Workflow
 
@@ -16,10 +23,10 @@ The demo simulates a payment workflow involving three conceptual agents:
 
 ## Table of Contents
 1. [Core Components](#core-components)
-2. [Supported Networks & Tokens](#supported-networks--tokens)
+2. [Supported Network](#supported-network)
 3. [Environment Setup](#environment-setup)
 4. [Quick Start](#quick-start)
-5. [A2A Agent Demo](#a2a-agent-demo)
+5. [Project Structure](#project-structure)
 6. [License](#license)
 7. [Additional Documentation](#additional-documentation)
 
@@ -30,15 +37,16 @@ The demo simulates a payment workflow involving three conceptual agents:
 ### Server (Resource Provider)
 - Hosts protected resources requiring blockchain-based payments.
 - Validates cryptographic payment receipts via the Facilitator.
-- Supports per-endpoint pricing using the `exact` scheme on `tron:nile`.
+- Supports per-endpoint pricing using the `exact` scheme on `tron:nile` and optional `eip155:97`.
 
 ### Facilitator (Payment Processor)
 - Validates signed payment permits and settles transactions on-chain.
 - Validates and settles TRON `exact` payments (`tip712` / `permit2`) on Nile.
+- Validates and settles BSC testnet `exact` payments using EIP-3009 compatible assets.
 
 ### Client (Resource Requester)
 - **TypeScript CLI** — Uses `x402Client` and `ExactTronScheme` from the new SDK.
-- **Python CLI / A2A** — Legacy/demo components remain in the repo but are not part of the new SDK Nile acceptance path.
+- **Python CLI / A2A** — Legacy/demo components remain in the repo but are not part of the new SDK acceptance path.
 
 ---
 
@@ -47,15 +55,20 @@ The demo simulates a payment workflow involving three conceptual agents:
 | Network | Chain ID | Payment Scheme | Transfer Methods |
 |---------|----------|----------------|------------------|
 | TRON Nile (testnet) | `tron:nile` | `exact` | `tip712`, `permit2` |
+| BSC Testnet (optional) | `eip155:97` | `exact` | `eip3009` |
+
+Endpoints exposed by the TypeScript demo:
+- `/protected-nile` — TRON-only
+- `/protected-bsc-testnet` — BSC-only
+- `/protected-multi` — advertises both networks in one `402` response
 
 ---
 
 ## Environment Setup
 
 ### Prerequisites
-- **Python 3.9+** (for local execution)
 - **Node.js 18+** (for TypeScript client)
-- **Docker** (optional, for containerized deployment)
+- **npm** (for bootstrap/install helpers)
 
 ### Configuration
 
@@ -76,7 +89,20 @@ FACILITATOR_PORT=8011
 SERVER_URL=http://localhost:8010
 FACILITATOR_URL=http://localhost:8011
 ENDPOINT=/protected-nile
+PREFERRED_NETWORK=
+
+# Optional BSC endpoint
+BSC_CLIENT_PRIVATE_KEY=<your_bsc_testnet_client_private_key>
+BSC_FACILITATOR_PRIVATE_KEY=<your_bsc_testnet_facilitator_private_key>
+BSC_PAY_TO=<your_bsc_recipient_address>
+BSC_TESTNET_RPC_URL=<your_bsc_testnet_rpc>
+BSC_TEST_ASSET=0x375cADdd2cB68cE82e3D9B075D551067a7b4B816
+BSC_TEST_ASSET_NAME=DA HULU
+BSC_TEST_ASSET_VERSION=1
+BSC_TEST_AMOUNT=1000
 ```
+
+For BSC demo runs, prefer a stable RPC provider. Public endpoints with strict rate limits can cause settlement to fail even when the payment payload is valid.
 
 ---
 
@@ -84,7 +110,7 @@ ENDPOINT=/protected-nile
 
 ### Step 1: Start Services
 
-Start the Nile facilitator and server:
+Start the facilitator and server:
 
 Before first run, install the local SDK shim:
 
@@ -94,12 +120,16 @@ npm run bootstrap:local-sdk
 
 **Using Scripts:**
 ```bash
-# Start Facilitator
-./start.sh facilitator
+# Start TypeScript Facilitator
+./start.sh ts-facilitator
 
-# Start Server (in a new terminal)
-./start.sh server
+# Start TypeScript Server (in a new terminal)
+./start.sh ts-server
 ```
+
+If dependencies are missing, the TypeScript commands also trigger the local SDK bootstrap automatically.
+The TypeScript server and MCP server retry facilitator synchronization on startup, so they no longer
+require a manual restart if the facilitator comes up a few seconds later.
 
 ### Step 2: Run a Client
 
@@ -108,10 +138,53 @@ npm run bootstrap:local-sdk
 ./start.sh ts-client
 ```
 
+To exercise the optional BSC endpoint:
+
+```bash
+ENDPOINT=/protected-bsc-testnet ./start.sh ts-client
+```
+
+This path expects the BSC variables above to be filled and currently uses the DHLU test token on `eip155:97`.
+
+To exercise a single endpoint that advertises both TRON and BSC, use:
+
+```bash
+ENDPOINT=/protected-multi PREFERRED_NETWORK=tron:nile ./start.sh ts-client
+```
+
+or:
+
+```bash
+ENDPOINT=/protected-multi PREFERRED_NETWORK=eip155:97 ./start.sh ts-client
+```
+
+If `PREFERRED_NETWORK` is omitted, the client falls back to the first option in `accepts`.
+
+### Optional: Run the MCP Demo
+
+Start the MCP server against the same local facilitator:
+
+```bash
+./start.sh ts-mcp-server
+```
+
+Then run the MCP client smoke flow:
+
+```bash
+./start.sh ts-mcp-client
+```
+
+The MCP demo uses SSE transport on `http://localhost:4022/sse` and calls:
+- `ping` (free)
+- `get_weather` (paid via `tron:nile` `exact`)
+
 ## Project Structure
 
 ```
 ├── ts/                  # TypeScript server / facilitator / client
+├── ts/mcp-server.ts     # MCP SSE server with paid tools
+├── ts/mcp-client.ts     # MCP client smoke test
+├── scripts/             # Local SDK bootstrap helper
 ├── start.sh             # Unified startup script
 └── .env.sample          # Environment variables template
 ```

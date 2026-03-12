@@ -11,6 +11,7 @@ import cors from "cors";
 import { x402ResourceServer } from "@bankofai/x402-core/server";
 import { HTTPFacilitatorClient } from "@bankofai/x402-core/http";
 import { ExactTronScheme } from "@bankofai/x402-tron/exact/server";
+import { ExactEvmScheme } from "@bankofai/x402-evm/exact/server";
 import { encodePaymentRequiredHeader, decodePaymentSignatureHeader } from "@bankofai/x402-core/http";
 import type { Network } from "@bankofai/x402-core/types";
 
@@ -23,9 +24,15 @@ if (!PAY_TO_ADDRESS) {
   console.error("Error: PAY_TO_ADDRESS is required");
   process.exit(1);
 }
+const BSC_PAY_TO_ADDRESS = process.env.BSC_PAY_TO;
+const BSC_TEST_ASSET = process.env.BSC_TEST_ASSET;
+const BSC_TEST_ASSET_NAME = process.env.BSC_TEST_ASSET_NAME ?? "DA HULU";
+const BSC_TEST_ASSET_VERSION = process.env.BSC_TEST_ASSET_VERSION ?? "1";
+const BSC_TEST_AMOUNT = process.env.BSC_TEST_AMOUNT ?? "1000";
 
 const PORT = Number(process.env.SERVER_PORT ?? 8010);
 const FACILITATOR_URL = process.env.FACILITATOR_URL ?? "http://localhost:8011";
+const FACILITATOR_RETRY_MS = Number(process.env.FACILITATOR_RETRY_MS ?? 3000);
 
 function encodeToBase64(obj: unknown): string {
   return Buffer.from(JSON.stringify(obj)).toString("base64");
@@ -37,21 +44,83 @@ function encodeToBase64(obj: unknown): string {
 
 interface EndpointConfig {
   path: string;
-  network: Network;
-  prices: Array<{ scheme: string; price: string; network: Network }>;
+  prices: Array<{
+    scheme: string;
+    network: Network;
+    payTo: string;
+    price:
+      | string
+      | {
+          amount: string;
+          asset: string;
+          extra?: Record<string, unknown>;
+        };
+  }>;
   label: string;
 }
 
 const ENDPOINTS: EndpointConfig[] = [
   {
     path: "/protected-nile",
-    network: "tron:nile",
     prices: [
-      { scheme: "exact", price: "$0.0001", network: "tron:nile" },
+      {
+        scheme: "exact",
+        price: "$0.0001",
+        network: "tron:nile",
+        payTo: PAY_TO_ADDRESS,
+      },
     ],
     label: "Nile Testnet (0.0001 USDT)",
   },
 ];
+
+if (BSC_PAY_TO_ADDRESS && BSC_TEST_ASSET) {
+  ENDPOINTS.push({
+    path: "/protected-bsc-testnet",
+    prices: [
+      {
+        scheme: "exact",
+        network: "eip155:97",
+        payTo: BSC_PAY_TO_ADDRESS,
+        price: {
+          amount: BSC_TEST_AMOUNT,
+          asset: BSC_TEST_ASSET,
+          extra: {
+            name: BSC_TEST_ASSET_NAME,
+            version: BSC_TEST_ASSET_VERSION,
+          },
+        },
+      },
+    ],
+    label: `BSC Testnet (${BSC_TEST_AMOUNT} ${BSC_TEST_ASSET_NAME})`,
+  });
+
+  ENDPOINTS.push({
+    path: "/protected-multi",
+    prices: [
+      {
+        scheme: "exact",
+        price: "$0.0001",
+        network: "tron:nile",
+        payTo: PAY_TO_ADDRESS,
+      },
+      {
+        scheme: "exact",
+        network: "eip155:97",
+        payTo: BSC_PAY_TO_ADDRESS,
+        price: {
+          amount: BSC_TEST_AMOUNT,
+          asset: BSC_TEST_ASSET,
+          extra: {
+            name: BSC_TEST_ASSET_NAME,
+            version: BSC_TEST_ASSET_VERSION,
+          },
+        },
+      },
+    ],
+    label: `Multi-network (TRON Nile or BSC Testnet ${BSC_TEST_ASSET_NAME})`,
+  });
+}
 
 // ---------------------------------------------------------------------------
 // Initialize resource server
@@ -63,6 +132,9 @@ const resourceServer = new x402ResourceServer(facilitatorClient);
 // Register TRON exact scheme for the Nile demo network
 const tronScheme = new ExactTronScheme();
 resourceServer.register("tron:nile", tronScheme);
+if (BSC_PAY_TO_ADDRESS && BSC_TEST_ASSET) {
+  resourceServer.register("eip155:97", new ExactEvmScheme());
+}
 
 // ---------------------------------------------------------------------------
 // Express app
@@ -73,6 +145,34 @@ app.use(cors());
 app.use(express.json());
 
 let requestCount = 0;
+let syncPromise: Promise<void> | null = null;
+
+async function syncWithFacilitator(): Promise<void> {
+  if (!syncPromise) {
+    syncPromise = (async () => {
+      await resourceServer.initialize();
+      console.log("[server] Synced with facilitator");
+    })().finally(() => {
+      syncPromise = null;
+    });
+  }
+
+  await syncPromise;
+}
+
+async function waitForFacilitatorSync(): Promise<void> {
+  while (true) {
+    try {
+      await syncWithFacilitator();
+      return;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.warn(`[server] Facilitator not ready: ${message}`);
+      console.warn(`[server] Retrying in ${FACILITATOR_RETRY_MS}ms...`);
+      await new Promise(resolve => setTimeout(resolve, FACILITATOR_RETRY_MS));
+    }
+  }
+}
 
 app.get("/", (_req, res) => {
   res.json({
@@ -89,25 +189,21 @@ app.get("/", (_req, res) => {
 // ---------------------------------------------------------------------------
 
 async function initServer() {
-  try {
-    await resourceServer.initialize();
-    console.log("[server] Synced with facilitator");
-  } catch (e: any) {
-    console.warn(`[server] Could not sync with facilitator: ${e.message}`);
-    console.warn("[server] Will retry on first request");
-  }
+  await waitForFacilitatorSync();
 
   for (const endpoint of ENDPOINTS) {
     const paymentOptions = endpoint.prices.map((p) => ({
       scheme: p.scheme,
       price: p.price,
       network: p.network,
-      payTo: PAY_TO_ADDRESS!,
+      payTo: p.payTo,
       maxTimeoutSeconds: 300,
     }));
 
     app.get(endpoint.path, async (req, res) => {
       try {
+        await syncWithFacilitator();
+
         const requirements = await resourceServer.buildPaymentRequirementsFromOptions(
           paymentOptions,
           {},
@@ -150,7 +246,7 @@ async function initServer() {
         requestCount++;
         const responseBody = {
           message: `Access granted! (request #${requestCount})`,
-          network: endpoint.network,
+          network: matchedReq.network,
           endpoint: endpoint.path,
           timestamp: new Date().toISOString(),
         };
