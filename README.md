@@ -15,8 +15,8 @@ Legacy Python, old TypeScript client examples, and broader A2A experiments remai
 
 The demo simulates a payment workflow involving three conceptual agents:
 1. The **Client** requests access to a protected resource from the **Server**.
-2. Upon receiving a `402 Payment Required` challenge, the Client signs a cryptographic permit (TIP-712 for TRON, EIP-712 for BSC).
-3. The **Facilitator** validates the signed permit and settles the transaction on-chain.
+2. Upon receiving a `402 Payment Required` challenge, the Client signs the selected payment payload for the advertised transfer method (`eip3009` or `permit2`).
+3. The **Facilitator** validates the signed payment payload and settles the transaction on-chain.
 4. Once payment is confirmed, the Server delivers the requested resource.
 
 ---
@@ -40,8 +40,8 @@ The demo simulates a payment workflow involving three conceptual agents:
 - Supports per-endpoint pricing using the `exact` scheme on `tron:nile` and optional `eip155:97`.
 
 ### Facilitator (Payment Processor)
-- Validates signed payment permits and settles transactions on-chain.
-- Validates and settles TRON `exact` payments (`tip712` / `permit2`) on Nile.
+- Validates signed payment payloads and settles transactions on-chain.
+- Validates and settles TRON `exact` payments (`eip3009` / `permit2`) on Nile.
 - Validates and settles BSC testnet `exact` payments using EIP-3009 compatible assets.
 
 ### Client (Resource Requester)
@@ -54,7 +54,7 @@ The demo simulates a payment workflow involving three conceptual agents:
 
 | Network | Chain ID | Payment Scheme | Transfer Methods |
 |---------|----------|----------------|------------------|
-| TRON Nile (testnet) | `tron:nile` | `exact` | `tip712`, `permit2` |
+| TRON Nile (testnet) | `tron:nile` | `exact` | `eip3009`, `permit2` |
 | BSC Testnet (optional) | `eip155:97` | `exact` | `eip3009` |
 
 Endpoints exposed by the TypeScript demo:
