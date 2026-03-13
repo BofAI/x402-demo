@@ -36,8 +36,8 @@ const PORT = Number(process.env.SERVER_PORT ?? 8000);
 const FACILITATOR_URL = process.env.FACILITATOR_URL ?? "http://localhost:8001";
 const FACILITATOR_RETRY_MS = Number(process.env.FACILITATOR_RETRY_MS ?? 3000);
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const DEMO_IMAGE_PATH = resolve(__dirname, "../assets/openclaw.jpg");
-const DEMO_IMAGE_MIME_TYPE = "image/jpeg";
+const DEMO_IMAGE_PATH = resolve(__dirname, "../server/protected.png");
+const DEMO_IMAGE_MIME_TYPE = "image/png";
 
 function encodeToBase64(obj: unknown): string {
   return Buffer.from(JSON.stringify(obj)).toString("base64");
