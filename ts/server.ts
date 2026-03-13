@@ -209,11 +209,8 @@ async function initServer() {
           {},
         );
 
-        // Check for payment header: v2 (PAYMENT-SIGNATURE), v1 (X-PAYMENT), or manual (x-402-payment)
-        const paymentHeader =
-          (req.headers["payment-signature"] as string | undefined) ??
-          (req.headers["x-payment"] as string | undefined) ??
-          (req.headers["x-402-payment"] as string | undefined);
+        // Check for the v2 payment header.
+        const paymentHeader = req.headers["payment-signature"] as string | undefined;
 
         if (!paymentHeader) {
           const paymentRequired = await resourceServer.createPaymentRequiredResponse(

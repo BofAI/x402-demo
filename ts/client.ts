@@ -8,6 +8,7 @@
 import "dotenv/config";
 import { TronWeb } from "tronweb";
 import { x402Client } from "@bankofai/x402-core/client";
+import { encodePaymentSignatureHeader } from "@bankofai/x402-core/http";
 import { safeBase64Decode } from "@bankofai/x402-core/utils";
 import { toClientEvmSigner } from "@bankofai/x402-evm";
 import { ExactEvmScheme } from "@bankofai/x402-evm/exact/client";
@@ -46,10 +47,6 @@ function normalizeHexPrivateKey(privateKey: string): `0x${string}` {
 
 function decodeBase64Json<T = any>(encoded: string): T {
   return JSON.parse(safeBase64Decode(encoded)) as T;
-}
-
-function encodeBase64Json(obj: unknown): string {
-  return Buffer.from(JSON.stringify(obj)).toString("base64");
 }
 
 function selectPaymentRequirements(preferredNetwork?: string) {
@@ -146,9 +143,8 @@ async function main() {
   console.log(`\nPayment created: scheme=${paymentPayload.accepted.scheme} network=${paymentPayload.accepted.network}`);
 
   // Step 3: Replay request with payment
-  const encoded = encodeBase64Json(paymentPayload);
   const payRes = await fetch(url, {
-    headers: { "x-402-payment": encoded },
+    headers: { "PAYMENT-SIGNATURE": encodePaymentSignatureHeader(paymentPayload) },
   });
 
   console.log(`\n${payRes.status} ${payRes.statusText}`);

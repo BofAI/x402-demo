@@ -19,7 +19,7 @@ from bankofai.x402.mechanisms.tron import ClientTronSigner, register_exact_tron_
 # ---------------------------------------------------------------------------
 
 load_dotenv(Path(__file__).parent / ".env")
-load_dotenv(Path(__file__).parent.parent / ".env")
+load_dotenv(Path(__file__).parent.parent.parent / ".env")
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -84,7 +84,7 @@ def main():
         print(f"\nGET {url}...")
         
         # Step 1: Initial request
-        response = http.post(url)
+        response = http.get(url)
         
         if response.status_code != 402:
             print(f"Status: {response.status_code}")
@@ -103,7 +103,7 @@ def main():
 
         # Step 3: Retry with payment header
         payment_headers = payment_client.encode_payment_signature_header(payment_payload)
-        response = http.post(url, headers=payment_headers)
+        response = http.get(url, headers=payment_headers)
 
         print(f"\nFinal Status: {response.status_code}")
         try:

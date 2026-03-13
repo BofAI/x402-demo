@@ -5,6 +5,7 @@ Supports TRON Nile and BSC Testnet.
 
 import os
 from pathlib import Path
+import time
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request
@@ -22,6 +23,7 @@ from bankofai.x402.http import (
     RouteConfig,
     HTTPRequestContext,
 )
+from bankofai.x402.http.constants import PAYMENT_SIGNATURE_HEADER
 from bankofai.x402.http.middleware.fastapi import FastAPIAdapter
 from bankofai.x402.mechanisms.evm.exact import register_exact_evm_server
 from bankofai.x402.mechanisms.tron import register_exact_tron_server
@@ -42,6 +44,8 @@ BSC_PAY_TO = os.getenv("BSC_PAY_TO", "")               # EVM hex
 FACILITATOR_URL = os.getenv("FACILITATOR_URL", "http://localhost:8001")
 SERVER_PORT = int(os.getenv("SERVER_PORT", "8000"))
 TRON_PRICE = os.getenv("TRON_PROTECTED_PRICE", "$0.0001")
+FACILITATOR_SYNC_RETRIES = int(os.getenv("FACILITATOR_SYNC_RETRIES", "20"))
+FACILITATOR_SYNC_RETRY_DELAY = float(os.getenv("FACILITATOR_SYNC_RETRY_DELAY", "1.0"))
 
 BSC_TEST_ASSET = os.getenv("BSC_TEST_ASSET", "")
 BSC_TEST_ASSET_NAME = os.getenv("BSC_TEST_ASSET_NAME", "DA HULU")
@@ -64,8 +68,6 @@ if TRON_PAY_TO:
 if BSC_PAY_TO:
     register_exact_evm_server(resource_server, networks="eip155:97")
 
-resource_server.initialize()
-
 # ---------------------------------------------------------------------------
 # Routes configuration
 # ---------------------------------------------------------------------------
@@ -78,6 +80,7 @@ if TRON_PAY_TO:
         network="tron:nile",
         pay_to=TRON_PAY_TO,
         price=TRON_PRICE,
+        extra={"assetTransferMethod": "permit2"},
     )
     routes["/protected-nile"] = RouteConfig(accepts=tron_accept)
 
@@ -126,6 +129,33 @@ app.add_middleware(
 )
 
 
+def initialize_resource_server() -> None:
+    last_error: Exception | None = None
+
+    for attempt in range(1, FACILITATOR_SYNC_RETRIES + 1):
+        try:
+            resource_server.initialize()
+            if attempt > 1:
+                print(f"Facilitator sync succeeded on attempt {attempt}.")
+            return
+        except Exception as exc:
+            last_error = exc
+            print(
+                f"Facilitator sync attempt {attempt}/{FACILITATOR_SYNC_RETRIES} failed: {exc}"
+            )
+            if attempt == FACILITATOR_SYNC_RETRIES:
+                break
+            time.sleep(FACILITATOR_SYNC_RETRY_DELAY)
+
+    if last_error is not None:
+        raise last_error
+
+
+@app.on_event("startup")
+def startup_sync():
+    initialize_resource_server()
+
+
 @app.get("/")
 def index():
     return {
@@ -150,7 +180,7 @@ def protected_resource(request: Request):
         adapter=adapter,
         path=adapter.get_path(),
         method=adapter.get_method(),
-        payment_header=adapter.get_header("Authorization") or adapter.get_header("x-402-payment")
+        payment_header=adapter.get_header(PAYMENT_SIGNATURE_HEADER),
     )
     result = http_server.process_http_request(ctx)
 

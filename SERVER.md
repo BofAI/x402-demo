@@ -60,7 +60,7 @@ restart when the facilitator comes up late.
 
 1. Unpaid request returns `402 Payment Required`.
 2. The response contains one or more `accepts` entries.
-3. The client sends a payment payload in `x-402-payment` or `payment-signature`.
+3. The client retries with a payment payload in `payment-signature`.
 4. The server verifies and settles through the facilitator, then returns the protected JSON body.
 
 ## Troubleshooting
