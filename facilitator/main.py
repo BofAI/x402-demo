@@ -88,7 +88,7 @@ app.add_middleware(
 @app.get("/supported")
 def supported():
     """Get supported payment kinds."""
-    return facilitator.supported()
+    return facilitator.get_supported()
 
 
 @app.post("/verify")

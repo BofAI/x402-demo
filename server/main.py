@@ -22,6 +22,7 @@ from bankofai.x402.http import (
     RouteConfig,
     HTTPRequestContext,
 )
+from bankofai.x402.http.middleware.fastapi import FastAPIAdapter
 from bankofai.x402.mechanisms.evm.exact import register_exact_evm_server
 from bankofai.x402.mechanisms.tron import register_exact_tron_server
 
@@ -74,11 +75,9 @@ if BSC_PAY_TO:
         PaymentOption(scheme="exact", network="eip155:97", pay_to=BSC_PAY_TO, price=PRICE)
     )
 
-routes = RoutesConfig(
-    routes=[
-        RouteConfig(path="/protected", methods=["GET"], accepts=accepts),
-    ]
-)
+routes: RoutesConfig = {
+    "/protected": RouteConfig(accepts=accepts)
+}
 http_server = x402HTTPResourceServerSync(resource_server, routes)
 
 # ---------------------------------------------------------------------------
@@ -118,13 +117,13 @@ def index():
 @app.get("/protected")
 def protected_resource(request: Request):
     """Payment-protected resource."""
+    adapter = FastAPIAdapter(request)
     ctx = HTTPRequestContext(
-        path=request.url.path,
-        method=request.method,
-        headers=dict(request.headers),
-        query_params=dict(request.query_params),
+        adapter=adapter,
+        path=adapter.get_path(),
+        method=adapter.get_method(),
+        payment_header=adapter.get_header("Authorization") or adapter.get_header("x-402-payment")
     )
-
     result = http_server.process_http_request(ctx)
 
     if result.type == "payment-error":
