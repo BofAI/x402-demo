@@ -15,7 +15,7 @@ import { privateKeyToAccount } from "viem/accounts";
 import { x402Facilitator } from "@bankofai/x402-core/facilitator";
 import { toFacilitatorEvmSigner } from "@bankofai/x402-evm";
 import { ExactEvmScheme as ExactEvmFacilitatorScheme } from "@bankofai/x402-evm/exact/facilitator";
-import { ExactTronScheme } from "@bankofai/x402-tron/exact/facilitator";
+import { ExactTronScheme } from "@bankofai/x402-tvm/exact/facilitator";
 import { createFacilitatorTronSigner } from "./signers.js";
 
 // ---------------------------------------------------------------------------

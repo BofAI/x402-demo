@@ -3,7 +3,7 @@ import express from "express";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import { HTTPFacilitatorClient, x402ResourceServer } from "@bankofai/x402-core/server";
-import { ExactTronScheme } from "@bankofai/x402-tron/exact/server";
+import { ExactTronScheme } from "@bankofai/x402-tvm/exact/server";
 import { createPaymentWrapper } from "@bankofai/x402-mcp";
 import { z } from "zod";
 

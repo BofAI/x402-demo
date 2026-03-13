@@ -12,7 +12,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { x402ResourceServer } from "@bankofai/x402-core/server";
 import { HTTPFacilitatorClient } from "@bankofai/x402-core/http";
-import { ExactTronScheme } from "@bankofai/x402-tron/exact/server";
+import { ExactTronScheme } from "@bankofai/x402-tvm/exact/server";
 import { ExactEvmScheme } from "@bankofai/x402-evm/exact/server";
 import { encodePaymentRequiredHeader, decodePaymentSignatureHeader } from "@bankofai/x402-core/http";
 import type { Network } from "@bankofai/x402-core/types";

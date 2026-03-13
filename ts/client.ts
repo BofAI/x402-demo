@@ -15,7 +15,7 @@ import { encodePaymentSignatureHeader } from "@bankofai/x402-core/http";
 import { safeBase64Decode } from "@bankofai/x402-core/utils";
 import { toClientEvmSigner } from "@bankofai/x402-evm";
 import { ExactEvmScheme } from "@bankofai/x402-evm/exact/client";
-import { ExactTronScheme } from "@bankofai/x402-tron/exact/client";
+import { ExactTronScheme } from "@bankofai/x402-tvm/exact/client";
 import { createPublicClient, http } from "viem";
 import { bscTestnet } from "viem/chains";
 import { privateKeyToAccount } from "viem/accounts";

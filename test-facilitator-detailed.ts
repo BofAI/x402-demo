@@ -6,7 +6,7 @@
 import "dotenv/config";
 import { TronWeb } from "tronweb";
 import { x402Client } from "@bankofai/x402-core/client";
-import { ExactTronScheme } from "@bankofai/x402-tron/exact/client";
+import { ExactTronScheme } from "@bankofai/x402-tvm/exact/client";
 
 // Load from x402-demo/.env
 const TRON_PRIVATE_KEY = process.env.TRON_CLIENT_PRIVATE_KEY ?? process.env.TRON_PRIVATE_KEY;

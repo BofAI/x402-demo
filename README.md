@@ -5,7 +5,7 @@
 The **X402 Demo** provides a practical demonstration of integrating the **x402 payment protocol** with TRON and BSC. The primary accepted path remains the **TypeScript v2 demo on TRON Nile**, and the same app can optionally expose a **BSC testnet** endpoint using the new SDK stack:
 
 - `@bankofai/x402-core`
-- `@bankofai/x402-tron`
+- `@bankofai/x402-tvm`
 - `@bankofai/x402-evm`
 - `@bankofai/x402-mcp`
 

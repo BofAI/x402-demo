@@ -2,7 +2,7 @@ import "dotenv/config";
 import { TronWeb } from "tronweb";
 import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js";
 import { createx402MCPClient } from "@bankofai/x402-mcp";
-import { ExactTronScheme } from "@bankofai/x402-tron/exact/client";
+import { ExactTronScheme } from "@bankofai/x402-tvm/exact/client";
 import { createClientTronSigner } from "./signers.js";
 
 const TRON_PRIVATE_KEY = process.env.TRON_CLIENT_PRIVATE_KEY ?? process.env.TRON_PRIVATE_KEY;

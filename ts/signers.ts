@@ -2,10 +2,10 @@
  * TronWeb-based signer adapters for x402 TRON mechanisms.
  *
  * Wraps TronWeb 6.x into the ClientTronSigner and FacilitatorTronSigner
- * interfaces expected by @bankofai/x402-tron.
+ * interfaces expected by @bankofai/x402-tvm.
  */
 
-import type { ClientTronSigner, FacilitatorTronSigner } from "@bankofai/x402-tron";
+import type { ClientTronSigner, FacilitatorTronSigner } from "@bankofai/x402-tvm";
 import { recoverTypedDataAddress, type Hex } from "viem";
 
 // TronWeb types (simplified — TronWeb 6.x doesn't ship great TS types)
