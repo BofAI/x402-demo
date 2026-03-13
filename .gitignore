@@ -19,3 +19,5 @@
 /logs/server-stdout.log
 /logs/supervisord.log
 .env
+.requirements.runtime.txt
+/client/typescript/package-lock.json
