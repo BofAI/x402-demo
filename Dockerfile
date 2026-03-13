@@ -21,6 +21,7 @@ RUN python -m venv /app/.venv && \
 # Copy Python service code
 COPY server/ /app/server/
 COPY facilitator/ /app/facilitator/
+COPY assets/ /app/assets/
 
 # Copy supervisor configuration
 COPY docker/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
