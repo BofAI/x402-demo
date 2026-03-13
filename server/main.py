@@ -52,8 +52,8 @@ logger.info(f"Starting x402-demo server on port {SERVER_PORT}")
 logger.debug(f"TRON PayTo: {TRON_PAY_TO}")
 logger.debug(f"EVM/BSC PayTo: {BSC_PAY_TO}")
 
-DEMO_IMAGE_PATH = Path(__file__).resolve().parent.parent / "assets" / "openclaw.jpg"
-DEMO_IMAGE_MEDIA_TYPE = "image/jpeg"
+DEMO_IMAGE_PATH = Path(__file__).resolve().parent / "protected.png"
+DEMO_IMAGE_MEDIA_TYPE = "image/png"
 
 if not DEMO_IMAGE_PATH.exists():
     raise FileNotFoundError(f"Missing demo image: {DEMO_IMAGE_PATH}")
