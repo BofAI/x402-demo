@@ -1,6 +1,6 @@
 """
 X402 Client Demo (x402 v2 Python SDK)
-Makes a payment-protected request to the resource server using EVM (BSC Testnet).
+Supports TRON Nile and BSC Testnet.
 """
 
 import os
@@ -12,6 +12,7 @@ from eth_account import Account
 from bankofai.x402 import x402ClientSync
 from bankofai.x402.mechanisms.evm import EthAccountSigner
 from bankofai.x402.mechanisms.evm.exact import register_exact_evm_client
+from bankofai.x402.mechanisms.tron import ClientTronSigner, register_exact_tron_client
 
 # ---------------------------------------------------------------------------
 # Load .env
@@ -24,35 +25,50 @@ load_dotenv(Path(__file__).parent.parent / ".env")
 # Configuration
 # ---------------------------------------------------------------------------
 
+TRON_PRIVATE_KEY = os.getenv("TRON_CLIENT_PRIVATE_KEY", os.getenv("TRON_PRIVATE_KEY", ""))
 BSC_PRIVATE_KEY = os.getenv("BSC_CLIENT_PRIVATE_KEY", os.getenv("BSC_PRIVATE_KEY", ""))
+
 SERVER_URL = os.getenv("SERVER_URL", "http://localhost:8010")
 ENDPOINT = os.getenv("ENDPOINT", "/protected")
-PREFERRED_NETWORK = os.getenv("PREFERRED_NETWORK", "eip155:97")
+PREFERRED_NETWORK = os.getenv("PREFERRED_NETWORK")
 
-if not BSC_PRIVATE_KEY:
-    raise ValueError("BSC_CLIENT_PRIVATE_KEY or BSC_PRIVATE_KEY environment variable is required")
+if not PREFERRED_NETWORK:
+    if TRON_PRIVATE_KEY:
+        PREFERRED_NETWORK = "tron:nile"
+        ENDPOINT = "/protected-nile"
+    else:
+        PREFERRED_NETWORK = "eip155:97"
+
+if not TRON_PRIVATE_KEY and not BSC_PRIVATE_KEY:
+    raise ValueError("At least one of TRON_CLIENT_PRIVATE_KEY or BSC_CLIENT_PRIVATE_KEY is required")
 
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
 def main():
-    # Normalize private key
-    pk = BSC_PRIVATE_KEY if BSC_PRIVATE_KEY.startswith("0x") else "0x" + BSC_PRIVATE_KEY
-    account = Account.from_key(pk)
-    signer = EthAccountSigner(account)
-
     print("=" * 60)
     print("X402 Client (Python / v2 SDK)")
     print("=" * 60)
-    print(f"  EVM Address: {account.address}")
-    print(f"  Target:      {SERVER_URL}{ENDPOINT}")
-    print(f"  Network:     {PREFERRED_NETWORK}")
-    print("=" * 60)
-
+    
     # Build client
     client = x402ClientSync()
-    register_exact_evm_client(client, signer)
+
+    if TRON_PRIVATE_KEY:
+        tron_signer = ClientTronSigner(private_key=TRON_PRIVATE_KEY)
+        register_exact_tron_client(client, tron_signer)
+        print(f"  TRON Address: {tron_signer.address}")
+
+    if BSC_PRIVATE_KEY:
+        pk = BSC_PRIVATE_KEY if BSC_PRIVATE_KEY.startswith("0x") else "0x" + BSC_PRIVATE_KEY
+        account = Account.from_key(pk)
+        evm_signer = EthAccountSigner(account)
+        register_exact_evm_client(client, evm_signer)
+        print(f"  EVM Address:  {account.address}")
+
+    print(f"  Target:       {SERVER_URL}{ENDPOINT}")
+    print(f"  Network:      {PREFERRED_NETWORK}")
+    print("=" * 60)
 
     import httpx
     from bankofai.x402.http import (
@@ -60,14 +76,35 @@ def main():
         PaymentRoundTripper,
     )
 
-    with httpx.Client() as http:
-        payment_client = x402HTTPClientSync(http, client)
+    with httpx.Client(timeout=120.0) as http:
+        payment_client = x402HTTPClientSync(client)
 
         url = f"{SERVER_URL}{ENDPOINT}"
         print(f"\nGET {url}...")
-        response = payment_client.request("GET", url)
+        
+        # Step 1: Initial request
+        response = http.post(url)
+        
+        if response.status_code != 402:
+            print(f"Status: {response.status_code}")
+            print(response.text[:500])
+            return
 
-        print(f"\nStatus: {response.status_code}")
+        print("\n402 Payment Required received")
+        
+        # Step 2: Create payment payload
+        # Handle both v2 and v1 via the helper
+        get_header = lambda h: response.headers.get(h)
+        payment_required = payment_client.get_payment_required_response(get_header, response.content)
+        
+        payment_payload = client.create_payment_payload(payment_required)
+        print(f"Payment created: scheme={payment_payload.accepted.scheme} network={payment_payload.accepted.network}")
+
+        # Step 3: Retry with payment header
+        payment_headers = payment_client.encode_payment_signature_header(payment_payload)
+        response = http.post(url, headers=payment_headers)
+
+        print(f"\nFinal Status: {response.status_code}")
         try:
             body = response.json()
             import json

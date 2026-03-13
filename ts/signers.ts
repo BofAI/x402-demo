@@ -70,16 +70,33 @@ export function createFacilitatorTronSigner(
     async verifyTypedData(args) {
       // Use viem's recoverTypedDataAddress to recover signer, then compare
       try {
+        const normalize = (a: any) => {
+          if (typeof a !== "string") return a;
+          if (a.startsWith("T") && a.length === 34) {
+            return tronWeb.address.toHex(a).toLowerCase().replace(/^41/, "0x") as Hex;
+          }
+          if (a.startsWith("0x")) return a.toLowerCase() as Hex;
+          return a;
+        };
+
+        const domain = { ...args.domain } as any;
+        if (domain.verifyingContract) domain.verifyingContract = normalize(domain.verifyingContract);
+
+        const message = { ...args.message } as any;
+        if (message.from) message.from = normalize(message.from);
+        if (message.to) message.to = normalize(message.to);
+        if (message.owner) message.owner = normalize(message.owner);
+        if (message.spender) message.spender = normalize(message.spender);
+
         const recovered = await recoverTypedDataAddress({
-          domain: args.domain as any,
+          domain: domain,
           types: args.types as any,
           primaryType: args.primaryType,
-          message: args.message as any,
+          message: message,
           signature: args.signature as Hex,
         });
 
-        // Normalize both to lowercase hex for comparison
-        const expectedHex = tronWeb.address.toHex(args.address).toLowerCase().replace(/^41/, "0x");
+        const expectedHex = normalize(args.address);
         const recoveredHex = recovered.toLowerCase();
         return expectedHex === recoveredHex;
       } catch (e) {
