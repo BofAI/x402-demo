@@ -31,7 +31,7 @@ The demo simulates a payment workflow involving three conceptual agents:
 1. The **Client** requests access to a protected resource from the **Server**.
 2. Upon receiving a `402 Payment Required` challenge, the Client signs the selected payment payload for the advertised transfer method (`eip3009` or `permit2`).
 3. The **Facilitator** validates the signed payment payload and settles the transaction on-chain.
-4. Once payment is confirmed, the Server delivers the requested resource.
+4. Once payment is confirmed, the Server delivers the protected demo image resource.
 
 ---
 

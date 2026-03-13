@@ -3,7 +3,8 @@
 ## Overview
 
 The TypeScript resource server in [`ts/server.ts`](./ts/server.ts) exposes payment-protected
-endpoints using `x402ResourceServer`.
+endpoints using `x402ResourceServer`. After settlement, each protected endpoint serves the shared
+demo image in [`assets/openclaw.jpg`](./assets/openclaw.jpg).
 
 It currently supports:
 
@@ -61,7 +62,7 @@ restart when the facilitator comes up late.
 1. Unpaid request returns `402 Payment Required`.
 2. The response contains one or more `accepts` entries.
 3. The client retries with a payment payload in `payment-signature`.
-4. The server verifies and settles through the facilitator, then returns the protected JSON body.
+4. The server verifies and settles through the facilitator, then returns the protected JPEG body.
 
 ## Troubleshooting
 

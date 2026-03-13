@@ -8,6 +8,8 @@
 import "dotenv/config";
 import express from "express";
 import cors from "cors";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { x402ResourceServer } from "@bankofai/x402-core/server";
 import { HTTPFacilitatorClient } from "@bankofai/x402-core/http";
 import { ExactTronScheme } from "@bankofai/x402-tron/exact/server";
@@ -33,6 +35,9 @@ const BSC_TEST_AMOUNT = process.env.BSC_TEST_AMOUNT ?? "1000";
 const PORT = Number(process.env.SERVER_PORT ?? 8000);
 const FACILITATOR_URL = process.env.FACILITATOR_URL ?? "http://localhost:8001";
 const FACILITATOR_RETRY_MS = Number(process.env.FACILITATOR_RETRY_MS ?? 3000);
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const DEMO_IMAGE_PATH = resolve(__dirname, "../assets/openclaw.jpg");
+const DEMO_IMAGE_MIME_TYPE = "image/jpeg";
 
 function encodeToBase64(obj: unknown): string {
   return Buffer.from(JSON.stringify(obj)).toString("base64");
@@ -178,6 +183,7 @@ app.get("/", (_req, res) => {
   res.json({
     service: "X402 Protected Resource Server (TypeScript)",
     status: "running",
+    resource: "Protected demo image",
     payTo: PAY_TO_ADDRESS,
     facilitator: FACILITATOR_URL,
     endpoints: ENDPOINTS.map((e) => ({ path: e.path, label: e.label })),
@@ -215,7 +221,7 @@ async function initServer() {
         if (!paymentHeader) {
           const paymentRequired = await resourceServer.createPaymentRequiredResponse(
             requirements,
-            { url: endpoint.path, description: endpoint.label, mimeType: "application/json" },
+            { url: endpoint.path, description: endpoint.label, mimeType: DEMO_IMAGE_MIME_TYPE },
           );
           res.setHeader("PAYMENT-REQUIRED", encodePaymentRequiredHeader(paymentRequired));
           res.status(402).json(paymentRequired);
@@ -239,21 +245,16 @@ async function initServer() {
           return;
         }
 
-        // Protected content
-        requestCount++;
-        const responseBody = {
-          message: `Access granted! (request #${requestCount})`,
-          network: matchedReq.network,
-          endpoint: endpoint.path,
-          timestamp: new Date().toISOString(),
-        };
-
         // Settle
         const settleResult = await resourceServer.settlePayment(paymentPayload, matchedReq);
 
         // Add settlement header
         res.setHeader("payment-response", encodeToBase64(settleResult));
-        res.json(responseBody);
+        res.setHeader("x-demo-network", matchedReq.network);
+        res.setHeader("x-demo-endpoint", endpoint.path);
+        requestCount++;
+        res.setHeader("x-demo-request-count", String(requestCount));
+        res.sendFile(DEMO_IMAGE_PATH);
       } catch (e: any) {
         console.error(`[${endpoint.path}] Error:`, e.message);
         res.status(500).json({ error: e.message });

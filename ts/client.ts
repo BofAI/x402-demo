@@ -7,6 +7,9 @@
 
 import "dotenv/config";
 import { TronWeb } from "tronweb";
+import { writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { x402Client } from "@bankofai/x402-core/client";
 import { encodePaymentSignatureHeader } from "@bankofai/x402-core/http";
 import { safeBase64Decode } from "@bankofai/x402-core/utils";
@@ -47,6 +50,19 @@ function normalizeHexPrivateKey(privateKey: string): `0x${string}` {
 
 function decodeBase64Json<T = any>(encoded: string): T {
   return JSON.parse(safeBase64Decode(encoded)) as T;
+}
+
+async function saveImage(response: Response): Promise<string> {
+  const contentType = response.headers.get("content-type") ?? "";
+  const ext = contentType.includes("jpeg") || contentType.includes("jpg")
+    ? "jpg"
+    : contentType.includes("webp")
+      ? "webp"
+      : "png";
+  const imageBuffer = Buffer.from(await response.arrayBuffer());
+  const outputPath = join(tmpdir(), `x402_${Date.now()}.${ext}`);
+  writeFileSync(outputPath, imageBuffer);
+  return outputPath;
 }
 
 function selectPaymentRequirements(preferredNetwork?: string) {
@@ -169,6 +185,9 @@ async function main() {
   if (ct.includes("application/json")) {
     const body = await payRes.json();
     console.log(`\n${JSON.stringify(body, null, 2)}`);
+  } else if (ct.includes("image/")) {
+    const imagePath = await saveImage(payRes);
+    console.log(`\nImage saved → ${imagePath}`);
   } else {
     const text = await payRes.text();
     console.log(`\n${text.slice(0, 500)}`);

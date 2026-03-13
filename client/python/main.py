@@ -4,7 +4,9 @@ Supports TRON Nile and BSC Testnet.
 """
 
 import os
+import json
 from pathlib import Path
+from tempfile import gettempdir
 
 from dotenv import load_dotenv
 from eth_account import Account
@@ -42,6 +44,19 @@ if not PREFERRED_NETWORK:
 
 if not TRON_PRIVATE_KEY and not BSC_PRIVATE_KEY:
     raise ValueError("At least one of TRON_CLIENT_PRIVATE_KEY or BSC_CLIENT_PRIVATE_KEY is required")
+
+
+def save_image_response(content: bytes, content_type: str) -> str:
+    if "jpeg" in content_type or "jpg" in content_type:
+        ext = "jpg"
+    elif "webp" in content_type:
+        ext = "webp"
+    else:
+        ext = "png"
+
+    output_path = Path(gettempdir()) / f"x402_{os.getpid()}_{Path.cwd().name}.{ext}"
+    output_path.write_bytes(content)
+    return str(output_path)
 
 # ---------------------------------------------------------------------------
 # Main
@@ -106,9 +121,15 @@ def main():
         response = http.get(url, headers=payment_headers)
 
         print(f"\nFinal Status: {response.status_code}")
+        content_type = response.headers.get("content-type", "")
+
+        if "image/" in content_type:
+            image_path = save_image_response(response.content, content_type)
+            print(f"Image saved: {image_path}")
+            return
+
         try:
             body = response.json()
-            import json
             print(json.dumps(body, indent=2))
         except Exception:
             print(response.text[:500])

@@ -3,8 +3,9 @@ import logging
 from pathlib import Path
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 import uvicorn
 
 from bankofai.x402 import x402ResourceServer
@@ -50,6 +51,12 @@ if not TRON_PAY_TO and not BSC_PAY_TO:
 logger.info(f"Starting x402-demo server on port {SERVER_PORT}")
 logger.debug(f"TRON PayTo: {TRON_PAY_TO}")
 logger.debug(f"EVM/BSC PayTo: {BSC_PAY_TO}")
+
+DEMO_IMAGE_PATH = Path(__file__).resolve().parent.parent / "assets" / "openclaw.jpg"
+DEMO_IMAGE_MEDIA_TYPE = "image/jpeg"
+
+if not DEMO_IMAGE_PATH.exists():
+    raise FileNotFoundError(f"Missing demo image: {DEMO_IMAGE_PATH}")
 
 # ---------------------------------------------------------------------------
 # Initialize Resource Server 
@@ -107,9 +114,9 @@ if TRON_PAY_TO:
         )
     )
 
-accepts_multi = [*accepts_nile]
+accepts_bsc = []
 if BSC_PAY_TO and BSC_TEST_ASSET:
-    accepts_multi.append(
+    accepts_bsc.append(
         PaymentOption(
             scheme="exact",
             network="eip155:97",
@@ -125,18 +132,28 @@ if BSC_PAY_TO and BSC_TEST_ASSET:
         )
     )
 
+accepts_multi = [*accepts_nile, *accepts_bsc]
+
 routes = {
     "GET /protected-nile": RouteConfig(
         accepts=accepts_nile,
-        mime_type="application/json",
-        description="TRON Nile Only Protected Content",
+        mime_type=DEMO_IMAGE_MEDIA_TYPE,
+        description="TRON Nile protected demo image",
     ),
-    "GET /protected-multi": RouteConfig(
-        accepts=accepts_multi,
-        mime_type="application/json",
-        description="Multi-chain Protected Content",
-    )
 }
+
+if accepts_bsc:
+    routes["GET /protected-bsc-testnet"] = RouteConfig(
+        accepts=accepts_bsc,
+        mime_type=DEMO_IMAGE_MEDIA_TYPE,
+        description="BSC testnet protected demo image",
+    )
+
+routes["GET /protected-multi"] = RouteConfig(
+    accepts=accepts_multi,
+    mime_type=DEMO_IMAGE_MEDIA_TYPE,
+    description="Multi-chain protected demo image",
+)
 
 # Attach global middleware
 logger.info("Applying x402 ASGI Middleware onto FastAPI app routes")
@@ -150,21 +167,24 @@ async def index():
     logger.debug("Received request on root / index")
     return {
         "service": "X402 Protected Server (ASGI Edition)",
-        "features": "Native Route Matching & Detailed Logging!"
+        "resource": "Protected demo image",
+        "image": str(DEMO_IMAGE_PATH.name),
     }
 
 @app.get("/protected-nile")
-async def protected_nile(request: Request):
+async def protected_nile():
     logger.info("Client successfully accessed /protected-nile after valid TRON payment!")
-    return {
-        "message": "Access granted! Payment verified on Nile.",
-        "receipt": getattr(request.state, "payment_payload", None).model_dump(by_alias=True) if hasattr(request.state, "payment_payload") else None
-    }
+    return FileResponse(DEMO_IMAGE_PATH, media_type=DEMO_IMAGE_MEDIA_TYPE, filename=DEMO_IMAGE_PATH.name)
+
+@app.get("/protected-bsc-testnet")
+async def protected_bsc_testnet():
+    logger.info("Client successfully accessed /protected-bsc-testnet after valid BSC payment!")
+    return FileResponse(DEMO_IMAGE_PATH, media_type=DEMO_IMAGE_MEDIA_TYPE, filename=DEMO_IMAGE_PATH.name)
 
 @app.get("/protected-multi")
 async def protected_multi():
     logger.info("Client successfully accessed /protected-multi after valid Multi-chain payment!")
-    return {"message": "Access granted to multi-chain resource!"}
+    return FileResponse(DEMO_IMAGE_PATH, media_type=DEMO_IMAGE_MEDIA_TYPE, filename=DEMO_IMAGE_PATH.name)
 
 def main():
     print("=" * 60)
