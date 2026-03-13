@@ -1,96 +1,69 @@
 """
-Facilitator Main Entry Point
-Starts a FastAPI server for facilitator operations with full payment flow support.
+Facilitator Main Entry Point (x402 v2 Python SDK)
+Starts a FastAPI server for facilitator operations using the new v2 SDK.
+Networks: EVM chains (BSC Testnet, Base Sepolia, etc.)
 """
 
-import asyncio
 import os
-import sys
 from pathlib import Path
-from typing import Any
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 
-from bankofai.x402.logging_config import setup_logging
-from bankofai.x402.facilitator import X402Facilitator
-from bankofai.x402.mechanisms.tron.exact_gasfree.facilitator import (
-    ExactGasFreeFacilitatorMechanism,
-)
-from bankofai.x402.utils.gasfree import GasFreeAPIClient
-from bankofai.x402.mechanisms.tron.exact_permit import ExactPermitTronFacilitatorMechanism
-from bankofai.x402.mechanisms.evm.exact_permit import ExactPermitEvmFacilitatorMechanism
-from bankofai.x402.mechanisms.evm.exact import ExactEvmFacilitatorMechanism
-from bankofai.x402.signers.facilitator import TronFacilitatorSigner, EvmFacilitatorSigner
-from bankofai.x402.config import NetworkConfig
-from bankofai.x402.tokens import TokenRegistry
-from bankofai.x402.types import (
-    PaymentPayload,
-    PaymentRequirements,
-)
-from pydantic import BaseModel
+from bankofai.x402 import x402FacilitatorSync, PaymentPayload, PaymentRequirements
+from bankofai.x402.mechanisms.evm import FacilitatorWeb3Signer
+from bankofai.x402.mechanisms.evm.exact import register_exact_evm_facilitator
 
+# ---------------------------------------------------------------------------
+# Load .env
+# ---------------------------------------------------------------------------
 
-class VerifyRequest(BaseModel):
-    """Verify request model"""
-    paymentPayload: PaymentPayload
-    paymentRequirements: PaymentRequirements
-
-
-class SettleRequest(BaseModel):
-    """Settle request model"""
-    paymentPayload: PaymentPayload
-    paymentRequirements: PaymentRequirements
-
-
-class FeeQuoteRequest(BaseModel):
-    """Fee quote request model"""
-    accepts: list[PaymentRequirements]
-    paymentPermitContext: dict | None = None
-
-# Setup logging
-setup_logging()
-
-# Load environment variables
 load_dotenv(Path(__file__).parent / ".env")
 load_dotenv(Path(__file__).parent.parent / ".env")
 
+# ---------------------------------------------------------------------------
 # Configuration
-TRON_PRIVATE_KEY = os.getenv("TRON_PRIVATE_KEY", "")
+# ---------------------------------------------------------------------------
+
 BSC_PRIVATE_KEY = os.getenv("BSC_PRIVATE_KEY", "")
+BSC_TESTNET_RPC_URL = os.getenv("BSC_TESTNET_RPC_URL", "https://data-seed-prebsc-1-s1.binance.org:8545")
+FACILITATOR_PORT = int(os.getenv("FACILITATOR_PORT", "8011"))
 
-# Facilitator configuration
-FACILITATOR_HOST = "0.0.0.0"
-FACILITATOR_PORT = 8011
-# TRON supported networks
-TRON_NETWORKS = ["nile"]
+if not BSC_PRIVATE_KEY:
+    raise ValueError("BSC_PRIVATE_KEY environment variable is required")
 
-# Fee config per token (smallest unit)
-TRON_BASE_FEE = {
-    "USDT": 100,       # 0.0001 USDT (6 decimals)
-    "USDD": 100_000_000_000_000,  # 0.0001 USDD (18 decimals)
-}
-BSC_BASE_FEE = {
-    "USDT": 100_000_000_000_000,      # 0.0001 USDT (18 decimals on BSC testnet)
-    "USDC": 100_000_000_000_000,      # 0.0001 USDC (18 decimals on BSC testnet)
-}
-BSC_MAINNET_BASE_FEE = {
-    "EPS": 100_000_000_000_000,       # 0.0001 EPS (18 decimals on BSC mainnet)
-}
+# ---------------------------------------------------------------------------
+# Initialize Facilitator
+# ---------------------------------------------------------------------------
 
-if not TRON_PRIVATE_KEY:
-    raise ValueError("TRON_PRIVATE_KEY environment variable is required")
+facilitator = x402FacilitatorSync()
 
-# Initialize FastAPI app
+# Register BSC Testnet EVM exact scheme
+bsc_signer = FacilitatorWeb3Signer(
+    private_key=BSC_PRIVATE_KEY,
+    rpc_url=BSC_TESTNET_RPC_URL,
+)
+register_exact_evm_facilitator(facilitator, bsc_signer, networks="eip155:97")
+
+print("=" * 60)
+print("X402 Facilitator (Python / v2 SDK)")
+print("=" * 60)
+print(f"  Facilitator Address: {bsc_signer.address}")
+print(f"  Registered Networks: eip155:97 (BSC Testnet)")
+print("=" * 60)
+
+# ---------------------------------------------------------------------------
+# FastAPI App
+# ---------------------------------------------------------------------------
+
 app = FastAPI(
-    title="X402 Facilitator",
-    description="Facilitator service for X402 payment protocol",
-    version="1.0.0",
+    title="X402 Facilitator (v2)",
+    description="Payment facilitator using x402 Python v2 SDK",
+    version="2.0.0",
 )
 
-# Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -99,138 +72,47 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Initialize X402Facilitator
-facilitator = X402Facilitator()
-
-# Initialize GasFree API clients
-gasfree_clients = {
-    "tron:nile": GasFreeAPIClient(NetworkConfig.get_gasfree_api_base_url("tron:nile")),
-}
-
-# Register TRON mechanisms
-for network in TRON_NETWORKS:
-    signer = TronFacilitatorSigner.from_private_key(TRON_PRIVATE_KEY)
-    mechanism = ExactPermitTronFacilitatorMechanism(
-        signer,
-        base_fee=TRON_BASE_FEE,
-    )
-    facilitator.register([f"tron:{network}"], mechanism)
-
-    # Add GasFree support for nile
-    if network == "nile":
-        gasfree_mechanism = ExactGasFreeFacilitatorMechanism(
-            signer,
-            clients=gasfree_clients,
-            base_fee=TRON_BASE_FEE,
-        )
-        facilitator.register([f"tron:{network}"], gasfree_mechanism)
-
-print("=" * 80)
-print("X402 Payment Facilitator - Configuration")
-print("=" * 80)
-print(f"TRON Base Fee: {TRON_BASE_FEE}")
-
-all_networks = [f"tron:{n}" for n in TRON_NETWORKS]
-print(f"Supported Networks: {', '.join(all_networks)}")
-
-print(f"\nNetwork Details:")
-for network_key in all_networks:
-    print(f"  {network_key}:")
-    print(f"    PaymentPermit: {NetworkConfig.get_payment_permit_address(network_key)}")
-    tokens = TokenRegistry.get_network_tokens(network_key)
-    if tokens:
-        for symbol, info in tokens.items():
-            print(f"    {symbol}: {info.address} (decimals={info.decimals})")
-print("=" * 80)
 
 @app.get("/supported")
 def supported():
-    """Get supported capabilities"""
+    """Get supported payment kinds."""
     return facilitator.supported()
 
 
-@app.post("/fee/quote")
-async def fee_quote(request: FeeQuoteRequest):
-    """
-    Get fee quote for payment requirements
-    
-    Args:
-        request: Fee quote request with payment requirements
-        
-    Returns:
-        Fee quote response with fee details
-    """
-    try:
-        return await facilitator.fee_quote(request.accepts, request.paymentPermitContext)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
 @app.post("/verify")
-async def verify(request: VerifyRequest):
-    """
-    Verify payment payload
-    
-    Args:
-        request: Verify request with payment payload and requirements
-        
-    Returns:
-        Verification result
-    """
-    import logging
-    logger = logging.getLogger(__name__)
-    logger.info(f"[VERIFY REQUEST] Payload: {request.paymentPayload.model_dump(by_alias=True)}")
-    
+def verify(body: dict):
+    """Verify a payment payload."""
     try:
-        result = await facilitator.verify(request.paymentPayload, request.paymentRequirements)
-        logger.info(f"[VERIFY RESULT] {result.model_dump(by_alias=True)}")
-        return result
+        payload = PaymentPayload.model_validate(body["paymentPayload"])
+        requirements = PaymentRequirements.model_validate(body["paymentRequirements"])
+        result = facilitator.verify(payload, requirements)
+        return result.model_dump(by_alias=True)
     except Exception as e:
-        logger.error(f"[VERIFY ERROR] {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/settle")
-async def settle(request: SettleRequest):
-    """
-    Settle payment on-chain
-    
-    Args:
-        request: Settle request with payment payload and requirements
-        
-    Returns:
-        Settlement result with transaction hash
-    """
+def settle(body: dict):
+    """Settle a payment on-chain."""
     try:
-        return await facilitator.settle(request.paymentPayload, request.paymentRequirements)
+        payload = PaymentPayload.model_validate(body["paymentPayload"])
+        requirements = PaymentRequirements.model_validate(body["paymentRequirements"])
+        result = facilitator.settle(payload, requirements)
+        return result.model_dump(by_alias=True)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# ---------------------------------------------------------------------------
+# Start
+# ---------------------------------------------------------------------------
+
 def main():
-    """Start the facilitator server"""
-    print("\n" + "=" * 80)
-    print("Starting X402 Facilitator Server")
-    print("=" * 80)
-    print(f"Host: {FACILITATOR_HOST}")
-    print(f"Port: {FACILITATOR_PORT}")
-    print(f"Supported Networks: {', '.join(all_networks)}")
-    print("=" * 80)
-    print("\nEndpoints:")
-    print(f"  GET  http://{FACILITATOR_HOST}:{FACILITATOR_PORT}/supported")
-    print(f"  POST http://{FACILITATOR_HOST}:{FACILITATOR_PORT}/fee/quote")
-    print(f"  POST http://{FACILITATOR_HOST}:{FACILITATOR_PORT}/verify")
-    print(f"  POST http://{FACILITATOR_HOST}:{FACILITATOR_PORT}/settle")
-    print("=" * 80 + "\n")
-    
-    uvicorn.run(
-        app,
-        host=FACILITATOR_HOST,
-        port=FACILITATOR_PORT,
-        log_level="info",
-    )
+    print(f"\nStarting X402 Facilitator on port {FACILITATOR_PORT}...")
+    print(f"  GET  http://0.0.0.0:{FACILITATOR_PORT}/supported")
+    print(f"  POST http://0.0.0.0:{FACILITATOR_PORT}/verify")
+    print(f"  POST http://0.0.0.0:{FACILITATOR_PORT}/settle\n")
+    uvicorn.run(app, host="0.0.0.0", port=FACILITATOR_PORT, log_level="info")
 
 
 if __name__ == "__main__":

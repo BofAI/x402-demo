@@ -1,207 +1,157 @@
+"""
+Protected Resource Server (x402 v2 Python SDK)
+Uses FastAPI + x402HTTPResourceServer for payment-protected endpoints.
+Network: EVM (BSC Testnet by default)
+"""
+
 import os
-import logging
-import io
-import threading
 from pathlib import Path
+
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
-from bankofai.x402.server import X402Server
-from bankofai.x402.fastapi import x402_protected
-from bankofai.x402.facilitator import FacilitatorClient
-from bankofai.x402.config import NetworkConfig
-from bankofai.x402.mechanisms.evm.exact_permit import ExactPermitEvmServerMechanism
-from bankofai.x402.mechanisms.evm.exact import ExactEvmServerMechanism
-from bankofai.x402.mechanisms.tron.exact_permit import ExactPermitTronServerMechanism
-from bankofai.x402.mechanisms.tron.exact_gasfree.server import ExactGasFreeServerMechanism
-from bankofai.x402.tokens import TokenInfo, TokenRegistry
+from fastapi.responses import JSONResponse
+import uvicorn
 
-from PIL import Image, ImageDraw, ImageFont
+from bankofai.x402 import x402ResourceServerSync
+from bankofai.x402.http import (
+    HTTPFacilitatorClientSync,
+    FacilitatorConfig,
+    x402HTTPResourceServerSync,
+    PaymentOption,
+    RoutesConfig,
+    RouteConfig,
+    HTTPRequestContext,
+)
+from bankofai.x402.mechanisms.evm.exact import register_exact_evm_server
 
+# ---------------------------------------------------------------------------
+# Load .env
+# ---------------------------------------------------------------------------
+
+load_dotenv(Path(__file__).parent / ".env")
 load_dotenv(Path(__file__).parent.parent / ".env")
 
-# Configure detailed logging
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
+# ---------------------------------------------------------------------------
+# Configuration
+# ---------------------------------------------------------------------------
+
+PAY_TO_ADDRESS = os.getenv("BSC_PAY_TO", os.getenv("PAY_TO_ADDRESS", ""))
+BSC_TESTNET_RPC_URL = os.getenv("BSC_TESTNET_RPC_URL", "https://data-seed-prebsc-1-s1.binance.org:8545")
+FACILITATOR_URL = os.getenv("FACILITATOR_URL", "http://localhost:8011")
+SERVER_PORT = int(os.getenv("SERVER_PORT", "8010"))
+PRICE = os.getenv("PROTECTED_PRICE", "$0.01")
+
+if not PAY_TO_ADDRESS:
+    raise ValueError("BSC_PAY_TO or PAY_TO_ADDRESS environment variable is required")
+
+# ---------------------------------------------------------------------------
+# Initialize Resource Server (sync)
+# ---------------------------------------------------------------------------
+
+facilitator_client = HTTPFacilitatorClientSync(FacilitatorConfig(url=FACILITATOR_URL))
+resource_server = x402ResourceServerSync(facilitator_client)
+register_exact_evm_server(resource_server, networks="eip155:97")
+resource_server.initialize()
+
+# ---------------------------------------------------------------------------
+# Routes configuration
+# ---------------------------------------------------------------------------
+
+routes = RoutesConfig(
+    routes=[
+        RouteConfig(
+            path="/protected",
+            methods=["GET"],
+            accepts=[
+                PaymentOption(
+                    scheme="exact",
+                    network="eip155:97",
+                    pay_to=PAY_TO_ADDRESS,
+                    price=PRICE,
+                )
+            ],
+        ),
+    ]
+)
+http_server = x402HTTPResourceServerSync(resource_server, routes)
+
+# ---------------------------------------------------------------------------
+# Express App
+# ---------------------------------------------------------------------------
+
+app = FastAPI(
+    title="X402 Protected Resource Server (v2)",
+    description="Resource server using x402 Python v2 SDK",
+    version="2.0.0",
 )
 
-# Set specific loggers to DEBUG for detailed output
-logging.getLogger("bankofai.x402").setLevel(logging.DEBUG)
-logging.getLogger("bankofai.x402.server").setLevel(logging.DEBUG)
-logging.getLogger("bankofai.x402.fastapi").setLevel(logging.DEBUG)
-logging.getLogger("bankofai.x402.utils").setLevel(logging.DEBUG)
-logging.getLogger("uvicorn.access").setLevel(logging.INFO)
-
-logger = logging.getLogger(__name__)
-
-app = FastAPI(title="X402 Server", description="Protected resource server")
-
-# Add CORS middleware to allow cross-origin requests from client/web
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, specify exact origins
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
     expose_headers=["*"],
 )
 
-# Configuration
-PAY_TO_ADDRESS = os.getenv("PAY_TO_ADDRESS")
-BSC_PAY_TO_ADDRESS = os.getenv("BSC_PAY_TO_ADDRESS", "")
-if not PAY_TO_ADDRESS:
-    raise ValueError("PAY_TO_ADDRESS environment variable is required")
-
-# Network selection - Change this to use different networks
-# Options: NetworkConfig.TRON_MAINNET, NetworkConfig.TRON_NILE,
-# NetworkConfig.TRON_SHASTA
-CURRENT_NETWORK = NetworkConfig.TRON_NILE
-
-# Server configuration
-FACILITATOR_URL = os.getenv("FACILITATOR_URL", "http://localhost:8011")
-FACILITATOR_API_KEY = os.getenv("FACILITATOR_API_KEY", "")  # Optional: for facilitator auth
-SERVER_HOST = "0.0.0.0"
-SERVER_PORT = 8010
-
-# Path to protected image
-PROTECTED_IMAGE_PATH = Path(__file__).parent / "protected.png"
-
-_request_count_lock = threading.Lock()
-_request_count = 0
-
-# Initialize server (TRON mechanisms auto-registered by default)
-server = X402Server()
-# Register TRON GasFree mechanism
-server.register(NetworkConfig.TRON_NILE, ExactGasFreeServerMechanism())
-# Add facilitator (with X-API-KEY if configured)
-facilitator_headers = {"X-API-KEY": FACILITATOR_API_KEY} if FACILITATOR_API_KEY else None
-facilitator = FacilitatorClient(
-    base_url=FACILITATOR_URL,
-    headers=facilitator_headers,
-)
-server.set_facilitator(facilitator)
-
-print("=" * 80)
-print("X402 Protected Resource Server - Configuration")
-print("=" * 80)
-print(f"Current Network: {CURRENT_NETWORK}")
-print(f"Pay To Address: {PAY_TO_ADDRESS}")
-print(f"Facilitator URL: {FACILITATOR_URL}")
-print(f"Facilitator API Key: {'*configured*' if FACILITATOR_API_KEY else '(not set)'}")
-permit_address = NetworkConfig.get_payment_permit_address(CURRENT_NETWORK)
-print(f"PaymentPermit Contract: {permit_address}")
-
-registered_networks = sorted(server._mechanisms.keys())
-print(f"\nAll Registered Networks ({len(registered_networks)}):")
-for net in registered_networks:
-    tokens = TokenRegistry.get_network_tokens(net)
-    is_current = " (CURRENT)" if net == CURRENT_NETWORK else ""
-    print(f"  {net}{is_current}:")
-    permit_addr = NetworkConfig.get_payment_permit_address(net)
-    print(f"    PaymentPermit: {permit_addr}")
-    if not tokens:
-        print("    (no tokens registered)")
-        continue
-    for symbol, info in tokens.items():
-        print(f"    {symbol}: {info.address} (decimals={info.decimals})")
-print("=" * 80)
-
-
-def generate_protected_image(
-    text: str, text_color: tuple[int, int, int, int] = (255, 255, 0, 255)
-) -> io.BytesIO:
-    """Generate a protected image with custom text and color"""
-    with Image.open(PROTECTED_IMAGE_PATH) as base:
-        image = base.convert("RGBA")
-        draw = ImageDraw.Draw(image)
-
-        try:
-            font = ImageFont.truetype("DejaVuSans.ttf", 50)
-        except Exception:
-            font = ImageFont.load_default()
-
-        x = 16
-        y = 16
-        padding = 6
-
-        bbox = draw.textbbox((x, y), text, font=font)
-        bg = (
-            bbox[0] - padding,
-            bbox[1] - padding,
-            bbox[2] + padding,
-            bbox[3] + padding,
-        )
-        draw.rectangle(bg, fill=(0, 0, 0, 160))
-        draw.text(
-            (x, y),
-            text,
-            fill=text_color,
-            font=font,
-            stroke_width=2,
-            stroke_fill=(0, 0, 0, 255),
-        )
-
-        buf = io.BytesIO()
-        image.save(buf, format="PNG")
-        buf.seek(0)
-        return buf
-
 
 @app.get("/")
-async def root():
-    """Service info"""
+def index():
     return {
-        "service": "X402 Protected Resource Server",
-        "status": "running",
-        "pay_to": PAY_TO_ADDRESS,
+        "service": "X402 Protected Resource Server (Python / v2 SDK)",
+        "networks": ["eip155:97 (BSC Testnet)"],
+        "endpoints": ["/protected - GET (payment required)"],
         "facilitator": FACILITATOR_URL,
+        "pay_to": PAY_TO_ADDRESS,
+        "price": PRICE,
     }
 
 
-@app.get("/protected-nile")
-@x402_protected(
-    server=server,
-    prices=["0.0001 USDT", "0.0001 USDD", "0.0001 USDT", "0.0001 USDD"],
-    schemes=["exact_permit", "exact_permit", "exact_gasfree", "exact_gasfree"],
-    network=CURRENT_NETWORK,
-    pay_to=PAY_TO_ADDRESS,
-)
-async def protected_endpoint(request: Request):
-    """Serve the protected image (generated dynamically)"""
-    global _request_count
-    if not PROTECTED_IMAGE_PATH.exists():
-        return {"error": "Protected image not found"}
-
-    with _request_count_lock:
-        _request_count += 1
-        request_count = _request_count
-
-    buf = generate_protected_image(
-        f"req: {request_count}", text_color=(255, 255, 0, 255)
+@app.get("/protected")
+def protected_resource(request: Request):
+    """Payment-protected resource. Returns 402 if no valid payment."""
+    ctx = HTTPRequestContext(
+        path=request.url.path,
+        method=request.method,
+        headers=dict(request.headers),
+        query_params=dict(request.query_params),
     )
-    return StreamingResponse(buf, media_type="image/png")
 
+    result = http_server.process_http_request(ctx)
+
+    if result.type == "payment-error":
+        resp = result.response
+        return JSONResponse(
+            status_code=resp.status,
+            headers=resp.headers,
+            content=resp.body,
+        )
+
+    # Payment verified — serve the protected content
+    return {
+        "message": "Access granted! Payment verified.",
+        "network": "eip155:97",
+        "pay_to": PAY_TO_ADDRESS,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Start
+# ---------------------------------------------------------------------------
+
+def main():
+    print("=" * 60)
+    print("X402 Protected Resource Server (Python / v2 SDK)")
+    print("=" * 60)
+    print(f"  Port:        {SERVER_PORT}")
+    print(f"  Pay To:      {PAY_TO_ADDRESS}")
+    print(f"  Price:       {PRICE}")
+    print(f"  Facilitator: {FACILITATOR_URL}")
+    print(f"  Protected:   http://0.0.0.0:{SERVER_PORT}/protected")
+    print("=" * 60)
+    uvicorn.run(app, host="0.0.0.0", port=SERVER_PORT, log_level="info")
 
 
 if __name__ == "__main__":
-    import uvicorn
-
-    print("\n" + "=" * 80)
-    print("Starting X402 Protected Resource Server")
-    print("=" * 80)
-    print(f"Host: {SERVER_HOST}")
-    print(f"Port: {SERVER_PORT}")
-    print("Endpoints:")
-    print("  /protected-nile         - Payment (0.0001 USDT) [Nile testnet]")
-    print("=" * 80 + "\n")
-
-    uvicorn.run(
-        app,
-        host=SERVER_HOST,
-        port=SERVER_PORT,
-        log_level="info",
-        access_log=True,
-    )
+    main()
