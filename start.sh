@@ -22,13 +22,17 @@ if [ -z "$COMPONENT" ]; then
     echo "Usage: ./start.sh <component>"
     echo ""
     echo "Components:"
-    echo "  ts-server      - Protected resource server (TypeScript/Express)"
-    echo "  ts-facilitator - Payment facilitator (TypeScript/Express)"
-    echo "  ts-client      - Payment client (TypeScript)"
-    echo "  ts-mcp-server  - MCP server (TypeScript/SSE)"
-    echo "  ts-mcp-client  - MCP client (TypeScript/SSE)"
-    echo "  a2a-server     - A2A Merchant Server"
-    echo "  a2a-client     - A2A Client Agent Web UI"
+    echo "  server       - Protected resource server (Python/FastAPI)"
+    echo "  facilitator  - Payment facilitator service (Python/FastAPI)"
+    echo "  client       - Payment client (Python)"
+    echo "  client-ts    - Payment client (TypeScript, deprecated SDK)"
+    echo "  ts-server    - Protected resource server (TypeScript/Express, new SDK)"
+    echo "  ts-facilitator - Payment facilitator (TypeScript/Express, new SDK)"
+    echo "  ts-client    - Payment client (TypeScript, new SDK)"
+    echo "  ts-mcp-server - MCP server (TypeScript/SSE, new SDK)"
+    echo "  ts-mcp-client - MCP client (TypeScript/SSE, new SDK)"
+    echo "  a2a-server   - A2A Merchant Server"
+    echo "  a2a-client   - A2A Client Agent Web UI"
     exit 1
 fi
 
@@ -44,6 +48,38 @@ if [ ! -f ".env" ]; then
 fi
 
 case "$COMPONENT" in
+    server)
+        echo "=========================================="
+        echo "Starting X402 Protected Resource Server"
+        echo "=========================================="
+        cd server
+        python main.py
+        ;;
+    facilitator)
+        echo "=========================================="
+        echo "Starting X402 Facilitator"
+        echo "=========================================="
+        cd facilitator
+        python main.py
+        ;;
+    client)
+        echo "=========================================="
+        echo "Starting X402 Client (Python)"
+        echo "=========================================="
+        cd client/python
+        python main.py
+        ;;
+    client-ts)
+        echo "=========================================="
+        echo "Starting X402 Client (TypeScript)"
+        echo "=========================================="
+        cd client/typescript
+        if [ ! -d "node_modules" ]; then
+            echo "Installing dependencies..."
+            npm install
+        fi
+        npm start
+        ;;
     ts-server)
         echo "=========================================="
         echo "Starting X402 Server (TypeScript / New SDK)"
@@ -93,13 +129,14 @@ case "$COMPONENT" in
         export SERVER_PORT="${SERVER_PORT:-8010}"
         export TRON_NETWORK="${TRON_NETWORK:-tron:nile}"
         export FACILITATOR_URL="${FACILITATOR_URL:-https://facilitator.bankofai.io}"
-
+        
+        # Load root .env if it exists
         if [ -f "../.env" ]; then
             set -a
             source ../.env
             set +a
         fi
-
+        
         uv run server --host "$SERVER_HOST" --port "$SERVER_PORT"
         ;;
     a2a-client)
@@ -108,18 +145,19 @@ case "$COMPONENT" in
         echo "=========================================="
         cd a2a
         export CLIENT_PORT="${CLIENT_PORT:-8080}"
-
+        
+        # Load root .env if it exists
         if [ -f "../.env" ]; then
             set -a
             source ../.env
             set +a
         fi
-
+        
         uv run adk web --port "$CLIENT_PORT"
         ;;
     *)
         echo "❌ Unknown component: $COMPONENT"
-        echo "Valid: ts-server, ts-facilitator, ts-client, ts-mcp-server, ts-mcp-client, a2a-server, a2a-client"
+        echo "Valid: server, facilitator, client, client-ts, ts-server, ts-facilitator, ts-client, ts-mcp-server, ts-mcp-client, a2a-server, a2a-client"
         exit 1
         ;;
 esac
