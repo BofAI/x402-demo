@@ -1,8 +1,16 @@
-# X402 Demo - Python Dependencies (v2 SDK)
+# X402 Demo - Python legacy/demo dependencies
 # Install with: pip install -r requirements.txt
+#
+# Note:
+# - The primary accepted demo path is TypeScript v2 under ./ts
+# - This file is only for the legacy/demo Python components under:
+#   ./server
+#   ./facilitator
+#   ./client/python
 
-# x402 v2 Python SDK
-bankofai.x402[evm] @ git+https://github.com/BofAI/x402.git@main#subdirectory=python/x402
+# Python x402 package used by the legacy/demo Python flow
+# Explicitly install both TRON and EVM extras for the demo.
+bankofai.x402[tron,evm] @ git+https://github.com/BofAI/x402.git@main#subdirectory=python/x402
 
 # Web framework
 fastapi>=0.104.0
@@ -17,9 +25,6 @@ python-dotenv>=1.0.0
 # EVM support (eth_account, web3 for signing/settlement on BSC etc.)
 eth-account>=0.10.0
 web3>=6.0.0
-
-# TRON support
-tronpy>=0.4.0
 
 # Data validation
 pydantic>=2.0.0

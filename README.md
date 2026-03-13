@@ -11,6 +11,20 @@ The **X402 Demo** provides a practical demonstration of integrating the **x402 p
 
 Legacy Python, old TypeScript client examples, and broader A2A experiments remain in the repository, but they are not part of the current TypeScript acceptance path.
 
+## Start Here
+
+If you are new to this repository, use the **TypeScript v2 path only**:
+
+1. Copy [`.env.sample`](./.env.sample) to `.env`
+2. Run `npm run bootstrap:local-sdk`
+3. Start:
+   - `./start.sh ts-facilitator`
+   - `./start.sh ts-server`
+   - `./start.sh ts-client`
+
+Use the Python folders only if you explicitly need to inspect or maintain the legacy/demo flow.
+They are still useful as references, but they are **not** the primary setup path for new developers.
+
 ### Payment Workflow
 
 The demo simulates a payment workflow involving three conceptual agents:
@@ -69,6 +83,7 @@ Endpoints exposed by the TypeScript demo:
 ### Prerequisites
 - **Node.js 18+** (for TypeScript client)
 - **npm** (for bootstrap/install helpers)
+- **Python 3.11+** only if you need the legacy Python demo components
 
 ### Configuration
 
@@ -108,17 +123,23 @@ For BSC demo runs, prefer a stable RPC provider. Public endpoints with strict ra
 
 ## Quick Start
 
-### Step 1: Start Services
-
-Start the facilitator and server:
-
-Before first run, install the local SDK shim:
+### Step 1: Install the TypeScript v2 demo dependencies
 
 ```bash
 npm run bootstrap:local-sdk
 ```
 
-**Using Scripts:**
+This installs the local v2 SDK packages used by:
+- `ts/server.ts`
+- `ts/facilitator.ts`
+- `ts/client.ts`
+- `ts/mcp-server.ts`
+- `ts/mcp-client.ts`
+
+### Step 2: Start Services
+
+Start the facilitator and server:
+
 ```bash
 # Start TypeScript Facilitator
 ./start.sh ts-facilitator
@@ -131,7 +152,7 @@ If dependencies are missing, the TypeScript commands also trigger the local SDK 
 The TypeScript server and MCP server retry facilitator synchronization on startup, so they no longer
 require a manual restart if the facilitator comes up a few seconds later.
 
-### Step 2: Run a Client
+### Step 3: Run a Client
 
 **TypeScript CLI:**
 ```bash
@@ -177,6 +198,25 @@ Then run the MCP client smoke flow:
 The MCP demo uses SSE transport on `http://localhost:4022/sse` and calls:
 - `ping` (free)
 - `get_weather` (paid via `tron:nile` `exact`)
+
+## Legacy Python Path
+
+The repository still contains Python demo components under:
+- [`server/`](./server)
+- [`facilitator/`](./facilitator)
+- [`client/python/`](./client/python)
+
+These use the Python `bankofai.x402` package plus `tronpy`, and are kept for compatibility/demo
+purposes. If you intentionally want that path:
+
+```bash
+./install_deps.sh
+./start.sh facilitator
+./start.sh server
+./start.sh client
+```
+
+If you only want the current v2 demo, **do not start here**. Use the TypeScript path above.
 
 ## Project Structure
 

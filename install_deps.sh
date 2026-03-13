@@ -6,6 +6,10 @@ REQ_FILE="$ROOT_DIR/requirements.txt"
 VENV_DIR="$ROOT_DIR/.venv"
 PY_BIN="$VENV_DIR/bin/python"
 
+echo "Installing legacy/demo Python dependencies for x402-demo." >&2
+echo "If you want the primary TypeScript v2 path, use: npm run bootstrap:local-sdk" >&2
+echo "" >&2
+
 if [[ ! -f "$REQ_FILE" ]]; then
   echo "requirements.txt not found: $REQ_FILE" >&2
   exit 1

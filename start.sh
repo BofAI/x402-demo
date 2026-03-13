@@ -21,6 +21,11 @@ ensure_ts_demo_deps() {
 if [ -z "$COMPONENT" ]; then
     echo "Usage: ./start.sh <component>"
     echo ""
+    echo "Recommended path for new developers:"
+    echo "  ./start.sh ts-facilitator"
+    echo "  ./start.sh ts-server"
+    echo "  ./start.sh ts-client"
+    echo ""
     echo "Components:"
     echo "  server       - Protected resource server (Python/FastAPI)"
     echo "  facilitator  - Payment facilitator service (Python/FastAPI)"
@@ -52,6 +57,7 @@ case "$COMPONENT" in
         echo "=========================================="
         echo "Starting X402 Protected Resource Server"
         echo "=========================================="
+        echo "Legacy/demo Python path. Prefer ts-server for the v2 demo."
         cd server
         python main.py
         ;;
@@ -59,6 +65,7 @@ case "$COMPONENT" in
         echo "=========================================="
         echo "Starting X402 Facilitator"
         echo "=========================================="
+        echo "Legacy/demo Python path. Prefer ts-facilitator for the v2 demo."
         cd facilitator
         python main.py
         ;;
@@ -66,6 +73,7 @@ case "$COMPONENT" in
         echo "=========================================="
         echo "Starting X402 Client (Python)"
         echo "=========================================="
+        echo "Legacy/demo Python path. Prefer ts-client for the v2 demo."
         cd client/python
         python main.py
         ;;
