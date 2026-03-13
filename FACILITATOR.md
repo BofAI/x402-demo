@@ -19,7 +19,7 @@ Required TRON configuration:
 
 ```env
 TRON_FACILITATOR_PRIVATE_KEY=<your_nile_facilitator_private_key>
-FACILITATOR_PORT=8011
+FACILITATOR_PORT=8001
 ```
 
 Optional BSC configuration:

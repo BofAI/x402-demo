@@ -27,7 +27,7 @@ if (!TRON_PRIVATE_KEY) {
   process.exit(1);
 }
 
-const SERVER_URL = process.env.SERVER_URL ?? "http://localhost:8010";
+const SERVER_URL = process.env.SERVER_URL ?? "http://localhost:8000";
 const ENDPOINT = process.env.ENDPOINT ?? "/protected-nile";
 const TRON_GRID_API_KEY = process.env.TRON_GRID_API_KEY ?? "";
 const BSC_CLIENT_PRIVATE_KEY = process.env.BSC_CLIENT_PRIVATE_KEY;

@@ -166,7 +166,7 @@ case "$COMPONENT" in
         echo "=========================================="
         cd a2a
         export SERVER_HOST="${SERVER_HOST:-0.0.0.0}"
-        export SERVER_PORT="${SERVER_PORT:-8010}"
+        export SERVER_PORT="${SERVER_PORT:-8000}"
         export TRON_NETWORK="${TRON_NETWORK:-tron:nile}"
         export FACILITATOR_URL="${FACILITATOR_URL:-https://facilitator.bankofai.io}"
         

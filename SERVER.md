@@ -17,8 +17,8 @@ Required:
 
 ```env
 PAY_TO_ADDRESS=<your_tron_pay_to_address>
-FACILITATOR_URL=http://localhost:8011
-SERVER_PORT=8010
+FACILITATOR_URL=http://localhost:8001
+SERVER_PORT=8000
 ```
 
 Optional BSC endpoint configuration:

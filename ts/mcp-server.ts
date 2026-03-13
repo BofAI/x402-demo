@@ -14,7 +14,7 @@ if (!PAY_TO_ADDRESS) {
 }
 const payToAddress = PAY_TO_ADDRESS;
 
-const FACILITATOR_URL = process.env.FACILITATOR_URL ?? "http://localhost:8011";
+const FACILITATOR_URL = process.env.FACILITATOR_URL ?? "http://localhost:8001";
 const PORT = Number(process.env.MCP_PORT ?? 4022);
 const FACILITATOR_RETRY_MS = Number(process.env.FACILITATOR_RETRY_MS ?? 3000);
 

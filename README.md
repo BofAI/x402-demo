@@ -99,10 +99,10 @@ PAY_TO_ADDRESS=<server_recipient_tron_address>
 TRON_GRID_API_KEY=<your_trongrid_api_key>
 
 # Service URLs (defaults)
-SERVER_PORT=8010
-FACILITATOR_PORT=8011
-SERVER_URL=http://localhost:8010
-FACILITATOR_URL=http://localhost:8011
+SERVER_PORT=8000
+FACILITATOR_PORT=8001
+SERVER_URL=http://localhost:8000
+FACILITATOR_URL=http://localhost:8001
 ENDPOINT=/protected-nile
 PREFERRED_NETWORK=
 
@@ -207,7 +207,8 @@ The repository still contains Python demo components under:
 - [`client/python/`](./client/python)
 
 These use the Python `bankofai.x402` package plus `tronpy`, and are kept for compatibility/demo
-purposes. If you intentionally want that path:
+purposes. Their routes now mirror the main demo endpoints (`/protected-nile`, `/protected-bsc-testnet`,
+`/protected-multi`) so the network and token defaults stay aligned. If you intentionally want that path:
 
 ```bash
 ./install_deps.sh

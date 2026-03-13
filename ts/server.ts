@@ -30,8 +30,8 @@ const BSC_TEST_ASSET_NAME = process.env.BSC_TEST_ASSET_NAME ?? "DA HULU";
 const BSC_TEST_ASSET_VERSION = process.env.BSC_TEST_ASSET_VERSION ?? "1";
 const BSC_TEST_AMOUNT = process.env.BSC_TEST_AMOUNT ?? "1000";
 
-const PORT = Number(process.env.SERVER_PORT ?? 8010);
-const FACILITATOR_URL = process.env.FACILITATOR_URL ?? "http://localhost:8011";
+const PORT = Number(process.env.SERVER_PORT ?? 8000);
+const FACILITATOR_URL = process.env.FACILITATOR_URL ?? "http://localhost:8001";
 const FACILITATOR_RETRY_MS = Number(process.env.FACILITATOR_RETRY_MS ?? 3000);
 
 function encodeToBase64(obj: unknown): string {

@@ -20,10 +20,10 @@ The client can choose from multiple payment options returned by a single endpoin
 Required for the default TRON flow:
 
 ```env
-SERVER_URL=http://localhost:8010
+SERVER_URL=http://localhost:8000
 ENDPOINT=/protected-nile
 TRON_CLIENT_PRIVATE_KEY=<your_nile_client_private_key>
-FACILITATOR_URL=http://localhost:8011
+FACILITATOR_URL=http://localhost:8001
 ```
 
 Optional for the BSC demo flow:

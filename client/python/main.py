@@ -28,7 +28,7 @@ load_dotenv(Path(__file__).parent.parent / ".env")
 TRON_PRIVATE_KEY = os.getenv("TRON_CLIENT_PRIVATE_KEY", os.getenv("TRON_PRIVATE_KEY", ""))
 BSC_PRIVATE_KEY = os.getenv("BSC_CLIENT_PRIVATE_KEY", os.getenv("BSC_PRIVATE_KEY", ""))
 
-SERVER_URL = os.getenv("SERVER_URL", "http://localhost:8010")
+SERVER_URL = os.getenv("SERVER_URL", "http://localhost:8000")
 ENDPOINT = os.getenv("ENDPOINT", "/protected")
 PREFERRED_NETWORK = os.getenv("PREFERRED_NETWORK")
 
@@ -38,6 +38,7 @@ if not PREFERRED_NETWORK:
         ENDPOINT = "/protected-nile"
     else:
         PREFERRED_NETWORK = "eip155:97"
+        ENDPOINT = "/protected-bsc-testnet"
 
 if not TRON_PRIVATE_KEY and not BSC_PRIVATE_KEY:
     raise ValueError("At least one of TRON_CLIENT_PRIVATE_KEY or BSC_CLIENT_PRIVATE_KEY is required")

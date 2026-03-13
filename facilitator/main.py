@@ -34,7 +34,7 @@ TRON_FULL_NODE = os.getenv("TRON_FULL_NODE", "https://nile.trongrid.io")
 BSC_PRIVATE_KEY = os.getenv("BSC_PRIVATE_KEY", "")
 BSC_TESTNET_RPC_URL = os.getenv("BSC_TESTNET_RPC_URL", "https://data-seed-prebsc-1-s1.binance.org:8545")
 
-FACILITATOR_PORT = int(os.getenv("FACILITATOR_PORT", "8011"))
+FACILITATOR_PORT = int(os.getenv("FACILITATOR_PORT", "8001"))
 
 if not TRON_PRIVATE_KEY and not BSC_PRIVATE_KEY:
     raise ValueError("At least one of TRON_PRIVATE_KEY or BSC_PRIVATE_KEY is required")

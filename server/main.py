@@ -39,9 +39,14 @@ load_dotenv(Path(__file__).parent.parent / ".env")
 
 TRON_PAY_TO = os.getenv("PAY_TO_ADDRESS", "")          # TRON Base58Check
 BSC_PAY_TO = os.getenv("BSC_PAY_TO", "")               # EVM hex
-FACILITATOR_URL = os.getenv("FACILITATOR_URL", "http://localhost:8011")
-SERVER_PORT = int(os.getenv("SERVER_PORT", "8010"))
-PRICE = os.getenv("PROTECTED_PRICE", "$0.01")
+FACILITATOR_URL = os.getenv("FACILITATOR_URL", "http://localhost:8001")
+SERVER_PORT = int(os.getenv("SERVER_PORT", "8000"))
+TRON_PRICE = os.getenv("TRON_PROTECTED_PRICE", "$0.0001")
+
+BSC_TEST_ASSET = os.getenv("BSC_TEST_ASSET", "")
+BSC_TEST_ASSET_NAME = os.getenv("BSC_TEST_ASSET_NAME", "DA HULU")
+BSC_TEST_ASSET_VERSION = os.getenv("BSC_TEST_ASSET_VERSION", "1")
+BSC_TEST_AMOUNT = os.getenv("BSC_TEST_AMOUNT", "1000")
 
 if not TRON_PAY_TO and not BSC_PAY_TO:
     raise ValueError("PAY_TO_ADDRESS (TRON) or BSC_PAY_TO (EVM) environment variable is required")
@@ -65,19 +70,40 @@ resource_server.initialize()
 # Routes configuration
 # ---------------------------------------------------------------------------
 
-accepts = []
-if TRON_PAY_TO:
-    accepts.append(
-        PaymentOption(scheme="exact", network="tron:nile", pay_to=TRON_PAY_TO, price=PRICE)
-    )
-if BSC_PAY_TO:
-    accepts.append(
-        PaymentOption(scheme="exact", network="eip155:97", pay_to=BSC_PAY_TO, price=PRICE)
-    )
+routes: RoutesConfig = {}
 
-routes: RoutesConfig = {
-    "/protected": RouteConfig(accepts=accepts)
-}
+if TRON_PAY_TO:
+    tron_accept = PaymentOption(
+        scheme="exact",
+        network="tron:nile",
+        pay_to=TRON_PAY_TO,
+        price=TRON_PRICE,
+    )
+    routes["/protected-nile"] = RouteConfig(accepts=tron_accept)
+
+if BSC_PAY_TO and BSC_TEST_ASSET:
+    bsc_accept = PaymentOption(
+        scheme="exact",
+        network="eip155:97",
+        pay_to=BSC_PAY_TO,
+        price={
+            "amount": BSC_TEST_AMOUNT,
+            "asset": BSC_TEST_ASSET,
+            "extra": {
+                "name": BSC_TEST_ASSET_NAME,
+                "version": BSC_TEST_ASSET_VERSION,
+            },
+        },
+    )
+    routes["/protected-bsc-testnet"] = RouteConfig(accepts=bsc_accept)
+
+if TRON_PAY_TO and BSC_PAY_TO and BSC_TEST_ASSET:
+    routes["/protected-multi"] = RouteConfig(accepts=[tron_accept, bsc_accept])
+elif TRON_PAY_TO:
+    routes["/protected"] = RouteConfig(accepts=tron_accept)
+elif BSC_PAY_TO and BSC_TEST_ASSET:
+    routes["/protected"] = RouteConfig(accepts=bsc_accept)
+
 http_server = x402HTTPResourceServerSync(resource_server, routes)
 
 # ---------------------------------------------------------------------------
@@ -108,13 +134,15 @@ def index():
             "tron:nile" if TRON_PAY_TO else "",
             "eip155:97 (BSC Testnet)" if BSC_PAY_TO else "",
         ])),
-        "endpoints": ["/protected - GET (payment required)"],
+        "endpoints": list(routes.keys()),
         "facilitator": FACILITATOR_URL,
-        "price": PRICE,
+        "price": {
+            "tron:nile": TRON_PRICE if TRON_PAY_TO else None,
+            "eip155:97": BSC_TEST_AMOUNT if BSC_PAY_TO and BSC_TEST_ASSET else None,
+        },
     }
 
 
-@app.get("/protected")
 def protected_resource(request: Request):
     """Payment-protected resource."""
     adapter = FastAPIAdapter(request)
@@ -140,6 +168,14 @@ def protected_resource(request: Request):
     }
 
 
+@app.get("/protected")
+@app.get("/protected-nile")
+@app.get("/protected-bsc-testnet")
+@app.get("/protected-multi")
+def protected_resource_route(request: Request):
+    return protected_resource(request)
+
+
 # ---------------------------------------------------------------------------
 # Start
 # ---------------------------------------------------------------------------
@@ -150,9 +186,14 @@ def main():
     print("=" * 60)
     print(f"  Port:        {SERVER_PORT}")
     print(f"  Facilitator: {FACILITATOR_URL}")
-    print(f"  Price:       {PRICE}")
+    print(f"  TRON Price:  {TRON_PRICE if TRON_PAY_TO else '(disabled)'}")
+    print(
+        f"  BSC Price:   "
+        f"{BSC_TEST_AMOUNT} {BSC_TEST_ASSET_NAME if BSC_PAY_TO and BSC_TEST_ASSET else '(disabled)'}"
+    )
     print(f"  TRON Pay To: {TRON_PAY_TO}")
     print(f"  BSC Pay To:  {BSC_PAY_TO}")
+    print(f"  Endpoints:   {', '.join(routes.keys())}")
     print("=" * 60)
     uvicorn.run(app, host="0.0.0.0", port=SERVER_PORT, log_level="info")
 

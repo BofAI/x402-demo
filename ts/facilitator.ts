@@ -28,7 +28,7 @@ if (!TRON_PRIVATE_KEY) {
   process.exit(1);
 }
 
-const PORT = Number(process.env.FACILITATOR_PORT ?? 8011);
+const PORT = Number(process.env.FACILITATOR_PORT ?? 8001);
 const TRON_GRID_API_KEY = process.env.TRON_GRID_API_KEY ?? "";
 const BSC_FACILITATOR_PRIVATE_KEY = process.env.BSC_FACILITATOR_PRIVATE_KEY;
 const BSC_TESTNET_RPC_URL = process.env.BSC_TESTNET_RPC_URL;
