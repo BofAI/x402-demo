@@ -1,22 +1,64 @@
 #!/bin/bash
 set -e
 
-# X402 TRON Demo - Unified Startup Script
-# Usage: ./start.sh [server|facilitator|client|client-ts]
+# X402 Demo - Unified Startup Script
+# Usage: ./start.sh <component>
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
 COMPONENT=$1
 
+ensure_ts_demo_deps() {
+    if [ -x "node_modules/.bin/tsx" ] && [ -d "node_modules/@bankofai/x402-core" ] && [ -d "node_modules/@bankofai/x402-tron" ] && [ -d "node_modules/@bankofai/x402-evm" ]; then
+        return
+    fi
+
+    echo "Bootstrapping local SDK packages for x402-demo..."
+    bash ./scripts/bootstrap-local-sdk.sh
+}
+
+ensure_py_demo_deps() {
+    local venv_python=".venv/bin/python"
+
+    if [ ! -x "$venv_python" ]; then
+        echo "Bootstrapping legacy/demo Python dependencies for x402-demo..."
+        bash ./install_deps.sh
+        return
+    fi
+
+    if ! "$venv_python" - <<'PY' >/dev/null 2>&1
+from bankofai import x402
+
+required = ("x402ClientSync", "x402ResourceServerSync", "x402FacilitatorSync")
+missing = [name for name in required if not hasattr(x402, name)]
+if missing:
+    raise SystemExit(1)
+PY
+    then
+        echo "Detected stale bankofai.x402 install in .venv; reinstalling demo Python dependencies..."
+        bash ./install_deps.sh
+    fi
+}
+
 if [ -z "$COMPONENT" ]; then
     echo "Usage: ./start.sh <component>"
+    echo ""
+    echo "Recommended path for new developers:"
+    echo "  ./start.sh ts-facilitator"
+    echo "  ./start.sh ts-server"
+    echo "  ./start.sh ts-client"
     echo ""
     echo "Components:"
     echo "  server       - Protected resource server (Python/FastAPI)"
     echo "  facilitator  - Payment facilitator service (Python/FastAPI)"
     echo "  client       - Payment client (Python)"
-    echo "  client-ts    - Payment client (TypeScript)"
+    echo "  client-ts    - Payment client (TypeScript, deprecated SDK)"
+    echo "  ts-server    - Protected resource server (TypeScript/Express, new SDK)"
+    echo "  ts-facilitator - Payment facilitator (TypeScript/Express, new SDK)"
+    echo "  ts-client    - Payment client (TypeScript, new SDK)"
+    echo "  ts-mcp-server - MCP server (TypeScript/SSE, new SDK)"
+    echo "  ts-mcp-client - MCP client (TypeScript/SSE, new SDK)"
     echo "  a2a-server   - A2A Merchant Server"
     echo "  a2a-client   - A2A Client Agent Web UI"
     exit 1
@@ -26,8 +68,9 @@ fi
 if [ ! -f ".env" ]; then
     echo "❌ Error: .env file not found"
     echo ""
-    echo "Please create .env file with:"
-    echo "  TRON_PRIVATE_KEY=your_private_key"
+    echo "Please copy .env.sample to .env and fill in:"
+    echo "  TRON_CLIENT_PRIVATE_KEY=your_nile_client_private_key"
+    echo "  TRON_FACILITATOR_PRIVATE_KEY=your_nile_facilitator_private_key"
     echo "  PAY_TO_ADDRESS=your_tron_address"
     exit 1
 fi
@@ -37,22 +80,34 @@ case "$COMPONENT" in
         echo "=========================================="
         echo "Starting X402 Protected Resource Server"
         echo "=========================================="
+        echo "Legacy/demo Python path. Prefer ts-server for the v2 demo."
         cd server
-        python main.py
+        cd ..
+        ensure_py_demo_deps
+        cd server
+        ../.venv/bin/python main.py
         ;;
     facilitator)
         echo "=========================================="
         echo "Starting X402 Facilitator"
         echo "=========================================="
+        echo "Legacy/demo Python path. Prefer ts-facilitator for the v2 demo."
         cd facilitator
-        python main.py
+        cd ..
+        ensure_py_demo_deps
+        cd facilitator
+        ../.venv/bin/python main.py
         ;;
     client)
         echo "=========================================="
         echo "Starting X402 Client (Python)"
         echo "=========================================="
+        echo "Legacy/demo Python path. Prefer ts-client for the v2 demo."
         cd client/python
-        python main.py
+        cd ../..
+        ensure_py_demo_deps
+        cd client/python
+        ../../.venv/bin/python main.py
         ;;
     client-ts)
         echo "=========================================="
@@ -64,6 +119,46 @@ case "$COMPONENT" in
             npm install
         fi
         npm start
+        ;;
+    ts-server)
+        echo "=========================================="
+        echo "Starting X402 Server (TypeScript / New SDK)"
+        echo "=========================================="
+        echo "Networks: TRON Nile (+ optional BSC Testnet)"
+        ensure_ts_demo_deps
+        npx tsx ts/server.ts
+        ;;
+    ts-facilitator)
+        echo "=========================================="
+        echo "Starting X402 Facilitator (TypeScript / New SDK)"
+        echo "=========================================="
+        echo "Networks: TRON Nile (+ optional BSC Testnet)"
+        ensure_ts_demo_deps
+        npx tsx ts/facilitator.ts
+        ;;
+    ts-client)
+        echo "=========================================="
+        echo "Starting X402 Client (TypeScript / New SDK)"
+        echo "=========================================="
+        echo "Networks: TRON Nile (+ optional BSC Testnet)"
+        ensure_ts_demo_deps
+        npx tsx ts/client.ts
+        ;;
+    ts-mcp-server)
+        echo "=========================================="
+        echo "Starting X402 MCP Server (TypeScript / New SDK)"
+        echo "=========================================="
+        echo "Network: TRON Nile"
+        ensure_ts_demo_deps
+        npx tsx ts/mcp-server.ts
+        ;;
+    ts-mcp-client)
+        echo "=========================================="
+        echo "Starting X402 MCP Client (TypeScript / New SDK)"
+        echo "=========================================="
+        echo "Network: TRON Nile"
+        ensure_ts_demo_deps
+        npx tsx ts/mcp-client.ts
         ;;
     a2a-server)
         echo "=========================================="
@@ -102,7 +197,7 @@ case "$COMPONENT" in
         ;;
     *)
         echo "❌ Unknown component: $COMPONENT"
-        echo "Valid: server, facilitator, client, client-ts, a2a-server, a2a-client"
+        echo "Valid: server, facilitator, client, client-ts, ts-server, ts-facilitator, ts-client, ts-mcp-server, ts-mcp-client, a2a-server, a2a-client"
         exit 1
         ;;
 esac

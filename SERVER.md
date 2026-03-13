@@ -2,61 +2,70 @@
 
 ## Overview
 
-The **Resource Server** securely delivers resources protected by blockchain payments via the x402 payment protocol.
+The TypeScript resource server in [`ts/server.ts`](./ts/server.ts) exposes payment-protected
+endpoints using `x402ResourceServer`. After settlement, each protected endpoint serves the shared
+demo image in [`assets/openclaw.jpg`](./assets/openclaw.jpg).
 
----
+It currently supports:
 
-## Features
+- `tron:nile` on `/protected-nile`
+- `eip155:97` on `/protected-bsc-testnet` when BSC env vars are configured
+- a combined `/protected-multi` endpoint that advertises both networks in one `402` response
 
-### Protected Resource Access
-- Validates blockchain payments for resource delivery.
-- Utilizes `/protected` endpoint to enforce access restrictions.
+## Environment Variables
 
-### Custom Resource Generation
-- Generates unique images dynamically using the Pillow library.
+Required:
 
----
-
-## Configuration
-
-### Environment Variables
-1. **PAY_TO_ADDRESS:** TRON wallet receiving funds.
-2. **FACILITATOR_URL:** Facilitator endpoint for permit validation.
-
-Example `.env` file:
 ```env
-PAY_TO_ADDRESS=<TRON_WALLET_ADDRESS>
+PAY_TO_ADDRESS=<your_tron_pay_to_address>
 FACILITATOR_URL=http://localhost:8001
+SERVER_PORT=8000
 ```
 
----
+Optional BSC endpoint configuration:
 
-## API Endpoints
+```env
+BSC_PAY_TO=<your_bsc_recipient_address>
+BSC_TESTNET_RPC_URL=<your_bsc_testnet_rpc>
+BSC_TEST_ASSET=<your_bsc_test_asset>
+BSC_TEST_ASSET_NAME=DA HULU
+BSC_TEST_ASSET_VERSION=1
+BSC_TEST_AMOUNT=1000
+```
 
-| Endpoint      | Method | Description                      |
-|---------------|--------|----------------------------------|
-| `/`           | `GET`  | Provides server metadata.        |
-| `/protected`  | `GET`  | Requires valid payment permits.  |
+Optional retry tuning:
 
----
+```env
+FACILITATOR_RETRY_MS=3000
+```
+
+## Endpoints
+
+| Endpoint | Method | Description |
+| --- | --- | --- |
+| `/` | `GET` | Server metadata and registered demo endpoints |
+| `/protected-nile` | `GET` | TRON Nile protected resource |
+| `/protected-bsc-testnet` | `GET` | BSC testnet protected resource |
+| `/protected-multi` | `GET` | One endpoint advertising both TRON and BSC payment options |
+
+## Usage
+
+```bash
+./start.sh ts-server
+```
+
+The server now retries facilitator synchronization on startup instead of requiring a manual
+restart when the facilitator comes up late.
+
+## Payment Flow
+
+1. Unpaid request returns `402 Payment Required`.
+2. The response contains one or more `accepts` entries.
+3. The client retries with a payment payload in `payment-signature`.
+4. The server verifies and settles through the facilitator, then returns the protected JPEG body.
 
 ## Troubleshooting
 
-1. **PAY_TO_ADDRESS Not Configured:**
-   - Ensure `.env` file is properly set up.
-   - Restart the server after any changes.
-
-2. **Resource Delivery Errors:**
-   - Check Facilitator service health using:
-     ```bash
-     curl http://localhost:8001/
-     ```
-
-3. **Slow Image Generation:**
-   - Optimize Pillow processing by caching pre-generated assets.
-
-4. **Service Downtime:**
-   - Restart using Docker Compose:
-     ```bash
-     docker-compose restart server
-     ```
+- If startup is blocked, check that the facilitator is reachable at `FACILITATOR_URL`.
+- If `/protected-multi` only shows one network, verify the optional BSC env vars are present.
+- If BSC payments are slow or flaky, switch to a less rate-limited RPC endpoint.

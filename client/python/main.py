@@ -1,184 +1,139 @@
-#!/usr/bin/env python3
 """
-X402 Demo - Terminal Client (Multi-Network)
-
-Registers BOTH TRON and EVM mechanisms by default so the client can
-handle 402 responses from any supported chain.  The server decides
-which network(s) to accept; the SDK picks the best affordable option.
+X402 Client Demo (x402 v2 Python SDK)
+Supports TRON Nile and BSC Testnet.
 """
 
-import asyncio
 import os
-import sys
-import tempfile
+import json
 from pathlib import Path
+from tempfile import gettempdir
 
-import httpx
-import logging
 from dotenv import load_dotenv
-from bankofai.x402.clients import X402Client, X402HttpClient, SufficientBalancePolicy
-from bankofai.x402.mechanisms.tron.exact_permit import ExactPermitTronClientMechanism
-from bankofai.x402.mechanisms.tron.exact_gasfree.client import ExactGasFreeClientMechanism
-from bankofai.x402.utils.gasfree import GasFreeAPIClient
-from bankofai.x402.config import NetworkConfig
-from bankofai.x402.mechanisms.evm.exact_permit import ExactPermitEvmClientMechanism
-from bankofai.x402.mechanisms.evm.exact import ExactEvmClientMechanism
-from bankofai.x402.signers.client import TronClientSigner, EvmClientSigner
-from bankofai.x402.tokens import TokenRegistry
-from bankofai.x402.types import PaymentRequirements
+from eth_account import Account
 
-# Custom policy to prefer exact_gasfree USDT
-class PreferGasFreeUSDTPolicy:
-    def __init__(self, client: X402Client) -> None:
-        self._client = client
+from bankofai.x402 import x402ClientSync
+from bankofai.x402.mechanisms.evm import EthAccountSigner
+from bankofai.x402.mechanisms.evm.exact import register_exact_evm_client
+from bankofai.x402.mechanisms.tron import ClientTronSigner, register_exact_tron_client
 
-    async def apply(self, requirements: list[PaymentRequirements]) -> list[PaymentRequirements]:
-        for req in requirements:
-            token_info = TokenRegistry.find_by_address(req.network, req.asset)
-            if req.scheme == "exact_gasfree" and token_info and token_info.symbol == "USDT":
-                print(f"🎯 Policy: Force selecting {req.scheme} ({token_info.symbol})")
-                return [req]
-        return requirements
+# ---------------------------------------------------------------------------
+# Load .env
+# ---------------------------------------------------------------------------
 
-# Enable detailed logging
-logging.basicConfig(
-    level=logging.DEBUG,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
+load_dotenv(Path(__file__).parent / ".env")
+load_dotenv(Path(__file__).parent.parent.parent / ".env")
 
-# Load environment variables
-load_dotenv()
-
+# ---------------------------------------------------------------------------
 # Configuration
-TRON_PRIVATE_KEY = os.getenv("TRON_PRIVATE_KEY", "")
-BSC_PRIVATE_KEY = os.getenv("BSC_PRIVATE_KEY", "")
+# ---------------------------------------------------------------------------
 
-# Server configuration
-# Change ENDPOINT_PATH to target a different server resource.
-# The server may return accepts[] spanning multiple networks.
-RESOURCE_SERVER_URL = os.getenv("SERVER_URL", "http://localhost:8000")
-ENDPOINT_PATH = "/protected-nile"
-# ENDPOINT_PATH = "/protected-mainnet"
-# ENDPOINT_PATH = "/protected-bsc-testnet"
-# ENDPOINT_PATH = "/protected-bsc-mainnet"
-RESOURCE_URL = RESOURCE_SERVER_URL + ENDPOINT_PATH
-HTTP_TIMEOUT_SECONDS = float(os.getenv("HTTP_TIMEOUT_SECONDS", "60"))
+TRON_PRIVATE_KEY = os.getenv("TRON_CLIENT_PRIVATE_KEY", os.getenv("TRON_PRIVATE_KEY", ""))
+BSC_PRIVATE_KEY = os.getenv("BSC_CLIENT_PRIVATE_KEY", os.getenv("BSC_PRIVATE_KEY", ""))
 
+SERVER_URL = os.getenv("SERVER_URL", "http://localhost:8000")
+ENDPOINT = os.getenv("ENDPOINT", "/protected")
+PREFERRED_NETWORK = os.getenv("PREFERRED_NETWORK")
 
-if not TRON_PRIVATE_KEY:
-    print("\n❌ Error: TRON_PRIVATE_KEY not set in .env file")
-    print("\nPlease add your TRON private key to .env file\n")
-    exit(1)
-
-async def main():
-    print("=" * 80)
-    print("X402 Payment Client (Multi-Network)")
-    print("=" * 80)
-
-    # --- Create signers for every chain family ---
-    tron_signer = TronClientSigner.from_private_key(TRON_PRIVATE_KEY)
-
-    # Initialize GasFree API clients
-    gasfree_clients = {
-        "tron:nile": GasFreeAPIClient(NetworkConfig.get_gasfree_api_base_url("tron:nile")),
-        "tron:shasta": GasFreeAPIClient(NetworkConfig.get_gasfree_api_base_url("tron:shasta")),
-        "tron:mainnet": GasFreeAPIClient(NetworkConfig.get_gasfree_api_base_url("tron:mainnet")),
-    }
-
-    # --- Register mechanisms for ALL networks ---
-    x402_client = X402Client()
-    x402_client.register("tron:*", ExactPermitTronClientMechanism(tron_signer))
-    x402_client.register("tron:*", ExactGasFreeClientMechanism(tron_signer, clients=gasfree_clients))
-    if BSC_PRIVATE_KEY:
-        evm_signer = EvmClientSigner.from_private_key(BSC_PRIVATE_KEY)
-        for bsc_network in [NetworkConfig.BSC_TESTNET, NetworkConfig.BSC_MAINNET]:
-            x402_client.register(bsc_network, ExactPermitEvmClientMechanism(evm_signer))
-            x402_client.register(bsc_network, ExactEvmClientMechanism(evm_signer))
-
-    # Balance policy: auto-resolves signers from registered mechanisms
-    x402_client.register_policy(SufficientBalancePolicy)
-    # Register custom selection policy (AFTER balance check)
-    x402_client.register_policy(PreferGasFreeUSDTPolicy)
-
-    print(f"TRON Address: {tron_signer.get_address()}")
-    if BSC_PRIVATE_KEY:
-        print(f"EVM  Address: {evm_signer.get_address()}")
+if not PREFERRED_NETWORK:
+    if TRON_PRIVATE_KEY:
+        PREFERRED_NETWORK = "tron:nile"
+        ENDPOINT = "/protected-nile"
     else:
-        print("EVM: not configured (BSC_PRIVATE_KEY not set)")
-    print(f"Resource URL: {RESOURCE_URL}")
+        PREFERRED_NETWORK = "eip155:97"
+        ENDPOINT = "/protected-bsc-testnet"
 
-    print(f"\nSupported Networks and Tokens:")
-    for network_name in ["tron:mainnet", "tron:nile", "tron:shasta", "eip155:97"]:
-        tokens = TokenRegistry.get_network_tokens(network_name)
-        print(f"  {network_name}:")
-        if not tokens:
-            print("    (no tokens registered)")
-        else:
-            for symbol, info in tokens.items():
-                print(f"    {symbol}: {info.address} (decimals={info.decimals})")
-    print("=" * 80)
+if not TRON_PRIVATE_KEY and not BSC_PRIVATE_KEY:
+    raise ValueError("At least one of TRON_CLIENT_PRIVATE_KEY or BSC_CLIENT_PRIVATE_KEY is required")
+
+
+def save_image_response(content: bytes, content_type: str) -> str:
+    if "jpeg" in content_type or "jpg" in content_type:
+        ext = "jpg"
+    elif "webp" in content_type:
+        ext = "webp"
+    else:
+        ext = "png"
+
+    output_path = Path(gettempdir()) / f"x402_{os.getpid()}_{Path.cwd().name}.{ext}"
+    output_path.write_bytes(content)
+    return str(output_path)
+
+# ---------------------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------------------
+
+def main():
+    print("=" * 60)
+    print("X402 Client (Python / v2 SDK)")
+    print("=" * 60)
     
-    try:
-        async with httpx.AsyncClient(timeout=HTTP_TIMEOUT_SECONDS) as http_client:
-            client = X402HttpClient(http_client, x402_client)
-            
-            print(f"\nRequesting: {RESOURCE_URL}")
-            # 发起请求（自动处理 402 支付）
-            response = await client.get(RESOURCE_URL)
-            print(f"\n✅ Success!")
+    # Build client
+    client = x402ClientSync()
+
+    if TRON_PRIVATE_KEY:
+        tron_signer = ClientTronSigner(private_key=TRON_PRIVATE_KEY)
+        register_exact_tron_client(client, tron_signer)
+        print(f"  TRON Address: {tron_signer.address}")
+
+    if BSC_PRIVATE_KEY:
+        pk = BSC_PRIVATE_KEY if BSC_PRIVATE_KEY.startswith("0x") else "0x" + BSC_PRIVATE_KEY
+        account = Account.from_key(pk)
+        evm_signer = EthAccountSigner(account)
+        register_exact_evm_client(client, evm_signer)
+        print(f"  EVM Address:  {account.address}")
+
+    print(f"  Target:       {SERVER_URL}{ENDPOINT}")
+    print(f"  Network:      {PREFERRED_NETWORK}")
+    print("=" * 60)
+
+    import httpx
+    from bankofai.x402.http import (
+        x402HTTPClientSync,
+        PaymentRoundTripper,
+    )
+
+    with httpx.Client(timeout=120.0) as http:
+        payment_client = x402HTTPClientSync(client)
+
+        url = f"{SERVER_URL}{ENDPOINT}"
+        print(f"\nGET {url}...")
+        
+        # Step 1: Initial request
+        response = http.get(url)
+        
+        if response.status_code != 402:
             print(f"Status: {response.status_code}")
-            print(f"Content-Type: {response.headers.get('content-type')}")
-            print(f"Content-Length: {len(response.content)} bytes")
-            
-            # Parse payment response if present
-            payment_response = response.headers.get('payment-response')
-            if payment_response:
-                from bankofai.x402.encoding import decode_payment_payload
-                from bankofai.x402.types import SettleResponse
-                settle_response = decode_payment_payload(payment_response, SettleResponse)
-                print(f"\n📋 Payment Response:")
-                print(f"  Success: {settle_response.success}")
-                print(f"  Network: {settle_response.network}")
-                print(f"  Transaction: {settle_response.transaction}")
-                if settle_response.error_reason:
-                    print(f"  Error: {settle_response.error_reason}")
-            
-            # Handle response based on content type
-            content_type = response.headers.get('content-type', '')
-            if 'application/json' in content_type:
-                print(f"\nResponse: {response.json()}")
-            elif 'image/' in content_type:
-                ext = "png"
-                if "jpeg" in content_type or "jpg" in content_type:
-                    ext = "jpg"
-                elif "webp" in content_type:
-                    ext = "webp"
+            print(response.text[:500])
+            return
 
-                with tempfile.NamedTemporaryFile(prefix="x402_", suffix=f".{ext}", delete=False, dir="/tmp") as f:
-                    f.write(response.content)
-                    saved_path = f.name
-                print(f"\n🖼️  Received image file, saved to: {saved_path}")
-            else:
-                print(f"\nResponse (first 200 chars): {response.text[:200]}")
+        print("\n402 Payment Required received")
+        
+        # Step 2: Create payment payload
+        # Handle both v2 and v1 via the helper
+        get_header = lambda h: response.headers.get(h)
+        payment_required = payment_client.get_payment_required_response(get_header, response.content)
+        
+        payment_payload = client.create_payment_payload(payment_required)
+        print(f"Payment created: scheme={payment_payload.accepted.scheme} network={payment_payload.accepted.network}")
 
-    except httpx.ReadTimeout:
-        print()
-        print("=" * 80)
-        print("❌ ERROR")
-        print("=" * 80)
-        print(
-            "Error: HTTP request timed out. This can happen during on-chain settlement. "
-            f"Try increasing HTTP_TIMEOUT_SECONDS (current: {HTTP_TIMEOUT_SECONDS})."
-        )
-        print()
-        import traceback
-        traceback.print_exc()
-        sys.exit(1)
-    except Exception as e:
-        print(f"\n❌ Error: {e}")
-        import traceback
-        traceback.print_exc()
+        # Step 3: Retry with payment header
+        payment_headers = payment_client.encode_payment_signature_header(payment_payload)
+        response = http.get(url, headers=payment_headers)
+
+        print(f"\nFinal Status: {response.status_code}")
+        content_type = response.headers.get("content-type", "")
+
+        if "image/" in content_type:
+            image_path = save_image_response(response.content, content_type)
+            print(f"Image saved: {image_path}")
+            return
+
+        try:
+            body = response.json()
+            print(json.dumps(body, indent=2))
+        except Exception:
+            print(response.text[:500])
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()

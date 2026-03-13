@@ -1,8 +1,26 @@
-# X402 TRON Demo - Python Dependencies
+# X402 Demo - Python legacy/demo dependencies
 # Install with: pip install -r requirements.txt
+#
+# Note:
+# - The primary accepted demo path is TypeScript v2 under ./ts
+# - This file is only for the legacy/demo Python components under:
+#   ./server
+#   ./facilitator
+#   ./client/python
 
-# Core bankofai-x402 SDK with TRON and FastAPI support (GitHub tag)
-bankofai-x402[tron,fastapi] @ git+https://github.com/BofAI/x402.git@v0.4.1#subdirectory=python/x402
+# Python x402 package used by the legacy/demo Python flow.
+#
+# In this monorepo, ./install_deps.sh prefers the sibling local Python v2 SDK at:
+#   ../x402/python/x402
+# so the demo stays aligned with the checked-out source.
+#
+# This VCS requirement is only the fallback path for users who cloned x402-demo
+# by itself without the sibling x402 repository.
+#
+# It must track the x402 repo branch that contains the current Python v2 SDK
+# sync exports and TRON/EVM extras. For external fallback installs, use the
+# x402 repo's dev/v2 branch.
+bankofai.x402[tron,evm] @ git+https://github.com/BofAI/x402.git@dev/v2#subdirectory=python/x402
 
 # Web framework
 fastapi>=0.104.0
@@ -14,15 +32,9 @@ httpx>=0.25.0
 # Environment variables
 python-dotenv>=1.0.0
 
-# TRON blockchain
-tronpy>=0.4.0
-
-# Ethereum utilities (for address/signature handling)
+# EVM support (eth_account, web3 for signing/settlement on BSC etc.)
 eth-account>=0.10.0
 web3>=6.0.0
-
-# Image processing (for server protected resource)
-Pillow>=10.0.0
 
 # Data validation
 pydantic>=2.0.0
