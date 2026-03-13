@@ -178,6 +178,20 @@ The MCP demo uses SSE transport on `http://localhost:4022/sse` and calls:
 - `ping` (free)
 - `get_weather` (paid via `tron:nile` `exact`)
 
+This MCP path is an **SDK integration demo**:
+- [`ts/mcp-server.ts`](/Users/bobo/code/x402/x402-demo/ts/mcp-server.ts) shows how to expose paid MCP tools with `createPaymentWrapper(...)`
+- [`ts/mcp-client.ts`](/Users/bobo/code/x402/x402-demo/ts/mcp-client.ts) shows how to use `createx402MCPClient(...)` against that server
+
+If you want an installable end-user entrypoint instead of the demo code, use the published
+`@bankofai/x402-mcp` package:
+- `x402 status`
+- `x402 balance`
+- `x402 pay <url>`
+- `x402-mcp` (stdio MCP server exposing `x402_status`, `x402_balance`, `x402_pay`)
+
+Use `x402-demo` to understand and test the SDK integration flow. Use `@bankofai/x402-mcp`
+when you want a packaged CLI/MCP installation path.
+
 ## Project Structure
 
 ```
