@@ -1,9 +1,7 @@
 # X402 Demo - Python Dependencies (v2 SDK)
 # Install with: pip install -r requirements.txt
 
-# x402 v2 Python SDK (local path during development, change to PyPI when released)
-# For production, replace with:
-# bankofai.x402[evm] @ git+https://github.com/BofAI/x402.git@main#subdirectory=python/x402
+# x402 v2 Python SDK
 bankofai.x402[evm] @ git+https://github.com/BofAI/x402.git@main#subdirectory=python/x402
 
 # Web framework
@@ -19,6 +17,9 @@ python-dotenv>=1.0.0
 # EVM support (eth_account, web3 for signing/settlement on BSC etc.)
 eth-account>=0.10.0
 web3>=6.0.0
+
+# TRON support
+tronpy>=0.4.0
 
 # Data validation
 pydantic>=2.0.0
