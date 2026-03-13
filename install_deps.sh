@@ -24,33 +24,11 @@ fi
 echo "Using Python: $PY_BIN" >&2
 "$PY_BIN" -m pip install --upgrade pip
 
-if [[ -n "$LOCAL_X402_PY_DIR" && -f "$LOCAL_X402_PY_DIR/pyproject.toml" ]]; then
-  echo "Installing local bankofai.x402 Python v2 SDK from: $LOCAL_X402_PY_DIR" >&2
-  "$PY_BIN" -m pip install --no-cache-dir --force-reinstall "${LOCAL_X402_PY_DIR}[tron,evm]"
-
-  echo "Installing remaining demo Python dependencies..." >&2
-  "$PY_BIN" - <<'PY'
-from pathlib import Path
-
-req = Path("requirements.txt")
-lines = req.read_text().splitlines()
-filtered = [
-    line
-    for line in lines
-    if line.strip()
-    and not line.lstrip().startswith("#")
-    and not line.startswith("bankofai.x402")
-]
-Path(".requirements.runtime.txt").write_text("\n".join(filtered) + "\n")
-PY
-  "$PY_BIN" -m pip install --no-cache-dir --force-reinstall -r "$ROOT_DIR/.requirements.runtime.txt"
-  rm -f "$ROOT_DIR/.requirements.runtime.txt"
-else
-  # Fallback for users who only cloned x402-demo without the sibling x402 repo.
-  # Force-refresh the dependency so stale site-packages installs do not hide
-  # newly exported sync helpers like x402FacilitatorSync.
-  "$PY_BIN" -m pip install --no-cache-dir --force-reinstall -r "$REQ_FILE"
-fi
+# Note: Local x402 SDK at ../x402/python/x402 installs as package 'x402',
+# but this demo requires 'bankofai.x402' from the Git URL.
+# Always use the Git URL to ensure correct package namespace.
+echo "Installing bankofai.x402 from Git URL (requirements.txt)..." >&2
+"$PY_BIN" -m pip install --no-cache-dir --force-reinstall -r "$REQ_FILE"
 
 echo "Validating bankofai.x402 sync exports..." >&2
 "$PY_BIN" - <<'PY'
