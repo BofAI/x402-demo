@@ -1,42 +1,43 @@
-"""
-Protected Resource Server (x402 v2 Python SDK)
-Supports TRON Nile and BSC Testnet.
-"""
-
 import os
+import logging
 from pathlib import Path
-import time
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
 import uvicorn
 
 from bankofai.x402 import x402ResourceServer
 from bankofai.x402.http import HTTPFacilitatorClient, PaymentOption, FacilitatorConfig
-from bankofai.x402.http.decorators.fastapi import x402_app
-from bankofai.x402.mechanisms.evm.exact import register_exact_evm_server
-from bankofai.x402.mechanisms.tron import register_exact_tron_server
+from bankofai.x402.http.middleware.fastapi import PaymentMiddlewareASGI
+from bankofai.x402.http.types import RouteConfig
+from bankofai.x402.mechanisms.evm.exact import ExactEvmServerScheme
+from bankofai.x402.mechanisms.tron import ExactTronServerScheme
+from bankofai.x402.schemas import AssetAmount
+
+# ---------------------------------------------------------------------------
+# Logging Configuration
+# ---------------------------------------------------------------------------
+logging.basicConfig(
+    level=logging.DEBUG,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
+logger = logging.getLogger("x402-demo-server")
 
 # ---------------------------------------------------------------------------
 # Load .env
 # ---------------------------------------------------------------------------
-
 load_dotenv(Path(__file__).parent / ".env")
 load_dotenv(Path(__file__).parent.parent / ".env")
 
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
-
 TRON_PAY_TO = os.getenv("PAY_TO_ADDRESS", "")          # TRON Base58Check
 BSC_PAY_TO = os.getenv("BSC_PAY_TO", "")               # EVM hex
 FACILITATOR_URL = os.getenv("FACILITATOR_URL", "http://localhost:8001")
 SERVER_PORT = int(os.getenv("SERVER_PORT", "8000"))
-TRON_PRICE = os.getenv("TRON_PROTECTED_PRICE", "$0.0001")
-FACILITATOR_SYNC_RETRIES = int(os.getenv("FACILITATOR_SYNC_RETRIES", "20"))
-FACILITATOR_SYNC_RETRY_DELAY = float(os.getenv("FACILITATOR_SYNC_RETRY_DELAY", "1.0"))
+TRON_PRICE = os.getenv("TRON_PROTECTED_PRICE", "100")
 
 BSC_TEST_ASSET = os.getenv("BSC_TEST_ASSET", "")
 BSC_TEST_ASSET_NAME = os.getenv("BSC_TEST_ASSET_NAME", "DA HULU")
@@ -46,28 +47,32 @@ BSC_TEST_AMOUNT = os.getenv("BSC_TEST_AMOUNT", "1000")
 if not TRON_PAY_TO and not BSC_PAY_TO:
     raise ValueError("PAY_TO_ADDRESS (TRON) or BSC_PAY_TO (EVM) environment variable is required")
 
-# ---------------------------------------------------------------------------
-# Initialize Resource Server (async)
-# ---------------------------------------------------------------------------
+logger.info(f"Starting x402-demo server on port {SERVER_PORT}")
+logger.debug(f"TRON PayTo: {TRON_PAY_TO}")
+logger.debug(f"EVM/BSC PayTo: {BSC_PAY_TO}")
 
+# ---------------------------------------------------------------------------
+# Initialize Resource Server 
+# ---------------------------------------------------------------------------
 facilitator_client = HTTPFacilitatorClient(FacilitatorConfig(url=FACILITATOR_URL))
-# We must use the async x402ResourceServer for the async decorators to work!
 resource_server = x402ResourceServer(facilitator_client)
 
 if TRON_PAY_TO:
-    register_exact_tron_server(resource_server, networks="tron:nile")
+    logger.info("Registering TRON exact payment scheme...")
+    resource_server.register("tron:nile", ExactTronServerScheme())
 if BSC_PAY_TO:
-    register_exact_evm_server(resource_server, networks="eip155:97")
+    logger.info("Registering EVM exact payment scheme...")
+    resource_server.register("eip155:97", ExactEvmServerScheme())
 
-x402 = x402_app(resource_server)
+# Initialize server immediately
+resource_server.initialize()
 
 # ---------------------------------------------------------------------------
 # FastAPI App
 # ---------------------------------------------------------------------------
-
 app = FastAPI(
     title="X402 Protected Resource Server (v2)",
-    description="Resource server using x402 Python v2 SDK decorators (TRON + EVM)",
+    description="Resource server using x402 Python v2 ASGI Middleware",
     version="2.0.0",
 )
 
@@ -80,63 +85,86 @@ app.add_middleware(
     expose_headers=["*"],
 )
 
-def build_payment_options():
-    options = []
-    if TRON_PAY_TO:
-        options.append(
-            PaymentOption(
-                scheme="exact",
-                network="tron:nile",
-                pay_to=TRON_PAY_TO,
-                price=TRON_PRICE,
-                extra={"assetTransferMethod": "permit2"}
-            )
-        )
-    if BSC_PAY_TO and BSC_TEST_ASSET:
-        options.append(
-            PaymentOption(
-                scheme="exact",
-                network="eip155:97",
-                pay_to=BSC_PAY_TO,
-                price={
-                    "amount": BSC_TEST_AMOUNT,
-                    "asset": BSC_TEST_ASSET,
-                    "extra": {
-                        "name": BSC_TEST_ASSET_NAME,
-                        "version": BSC_TEST_ASSET_VERSION
-                    }
+# ---------------------------------------------------------------------------
+# Configure x402 Routes
+# ---------------------------------------------------------------------------
+accepts_nile = []
+if TRON_PAY_TO:
+    accepts_nile.append(
+        PaymentOption(
+            scheme="exact",
+            network="tron:nile",
+            pay_to=TRON_PAY_TO,
+            price=AssetAmount(
+                amount=TRON_PRICE,
+                asset="TXYZopYRdj2D9XRtbG411XZZ3kM5VkAeBf",
+                extra={
+                    "name": "Tether USD",
+                    "version": "1",
+                    "assetTransferMethod": "permit2"
                 }
             )
         )
-    return options
+    )
 
-@app.on_event("startup")
-async def startup() -> None:
-    # Need to initialize the resource server
-    resource_server.initialize()
+accepts_multi = [*accepts_nile]
+if BSC_PAY_TO and BSC_TEST_ASSET:
+    accepts_multi.append(
+        PaymentOption(
+            scheme="exact",
+            network="eip155:97",
+            pay_to=BSC_PAY_TO,
+            price=AssetAmount(
+                amount=BSC_TEST_AMOUNT,
+                asset=BSC_TEST_ASSET,
+                extra={
+                    "name": BSC_TEST_ASSET_NAME,
+                    "version": BSC_TEST_ASSET_VERSION
+                }
+            )
+        )
+    )
 
+routes = {
+    "GET /protected-nile": RouteConfig(
+        accepts=accepts_nile,
+        mime_type="application/json",
+        description="TRON Nile Only Protected Content",
+    ),
+    "GET /protected-multi": RouteConfig(
+        accepts=accepts_multi,
+        mime_type="application/json",
+        description="Multi-chain Protected Content",
+    )
+}
+
+# Attach global middleware
+logger.info("Applying x402 ASGI Middleware onto FastAPI app routes")
+app.add_middleware(PaymentMiddlewareASGI, routes=routes, server=resource_server)
+
+# ---------------------------------------------------------------------------
+# Route Handlers
+# ---------------------------------------------------------------------------
 @app.get("/")
 async def index():
+    logger.debug("Received request on root / index")
     return {
-        "service": "X402 Protected Server (Python Decorator)",
-        "features": "Decorators!"
+        "service": "X402 Protected Server (ASGI Edition)",
+        "features": "Native Route Matching & Detailed Logging!"
     }
 
 @app.get("/protected-nile")
-@x402.pay(scheme="exact", network="tron:nile", pay_to=TRON_PAY_TO, price=TRON_PRICE, extra={"assetTransferMethod": "permit2"})
 async def protected_nile(request: Request):
+    logger.info("Client successfully accessed /protected-nile after valid TRON payment!")
     return {
         "message": "Access granted! Payment verified on Nile.",
         "receipt": getattr(request.state, "payment_payload", None).model_dump(by_alias=True) if hasattr(request.state, "payment_payload") else None
     }
 
 @app.get("/protected-multi")
-@x402.pay(build_payment_options())
 async def protected_multi():
+    logger.info("Client successfully accessed /protected-multi after valid Multi-chain payment!")
     return {"message": "Access granted to multi-chain resource!"}
-
-# Register the middleware hooks for the decorators!
-x402.init_app(app)
 
 def main():
     print("=" * 60)
