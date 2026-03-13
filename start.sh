@@ -18,6 +18,29 @@ ensure_ts_demo_deps() {
     bash ./scripts/bootstrap-local-sdk.sh
 }
 
+ensure_py_demo_deps() {
+    local venv_python=".venv/bin/python"
+
+    if [ ! -x "$venv_python" ]; then
+        echo "Bootstrapping legacy/demo Python dependencies for x402-demo..."
+        bash ./install_deps.sh
+        return
+    fi
+
+    if ! "$venv_python" - <<'PY' >/dev/null 2>&1
+from bankofai import x402
+
+required = ("x402ClientSync", "x402ResourceServerSync", "x402FacilitatorSync")
+missing = [name for name in required if not hasattr(x402, name)]
+if missing:
+    raise SystemExit(1)
+PY
+    then
+        echo "Detected stale bankofai.x402 install in .venv; reinstalling demo Python dependencies..."
+        bash ./install_deps.sh
+    fi
+}
+
 if [ -z "$COMPONENT" ]; then
     echo "Usage: ./start.sh <component>"
     echo ""
@@ -59,7 +82,10 @@ case "$COMPONENT" in
         echo "=========================================="
         echo "Legacy/demo Python path. Prefer ts-server for the v2 demo."
         cd server
-        python main.py
+        cd ..
+        ensure_py_demo_deps
+        cd server
+        ../.venv/bin/python main.py
         ;;
     facilitator)
         echo "=========================================="
@@ -67,7 +93,10 @@ case "$COMPONENT" in
         echo "=========================================="
         echo "Legacy/demo Python path. Prefer ts-facilitator for the v2 demo."
         cd facilitator
-        python main.py
+        cd ..
+        ensure_py_demo_deps
+        cd facilitator
+        ../.venv/bin/python main.py
         ;;
     client)
         echo "=========================================="
@@ -75,7 +104,10 @@ case "$COMPONENT" in
         echo "=========================================="
         echo "Legacy/demo Python path. Prefer ts-client for the v2 demo."
         cd client/python
-        python main.py
+        cd ../..
+        ensure_py_demo_deps
+        cd client/python
+        ../../.venv/bin/python main.py
         ;;
     client-ts)
         echo "=========================================="

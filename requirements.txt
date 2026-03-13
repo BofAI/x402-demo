@@ -8,9 +8,20 @@
 #   ./facilitator
 #   ./client/python
 
-# Python x402 package used by the legacy/demo Python flow
-# Explicitly install both TRON and EVM extras for the demo.
-bankofai.x402[tron,evm] @ git+https://github.com/BofAI/x402.git@main#subdirectory=python/x402
+# Python x402 package used by the legacy/demo Python flow.
+#
+# In this monorepo, ./install_deps.sh prefers the sibling local Python v2 SDK at:
+#   ../x402/python/x402
+# so the demo stays aligned with the checked-out source.
+#
+# This VCS requirement is only the fallback path for users who cloned x402-demo
+# by itself without the sibling x402 repository.
+#
+# It must track the x402 repo branch that contains the current Python v2 SDK
+# sync exports. For external fallback installs, use the x402 repo's dev/v2
+# branch. TRON runtime support is still listed separately below so standalone
+# demo installs work even before that branch grows a formal `tron` extra.
+bankofai.x402[evm] @ git+https://github.com/BofAI/x402.git@dev/v2#subdirectory=python/x402
 
 # Web framework
 fastapi>=0.104.0
@@ -21,6 +32,10 @@ httpx>=0.25.0
 
 # Environment variables
 python-dotenv>=1.0.0
+
+# TRON support for standalone/fallback installs
+tronpy>=0.4.0
+base58>=2.1.1
 
 # EVM support (eth_account, web3 for signing/settlement on BSC etc.)
 eth-account>=0.10.0
