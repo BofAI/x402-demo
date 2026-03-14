@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 import uvicorn
 
-from bankofai.x402 import x402ResourceServer
+from bankofai.x402 import AssetAmount, x402ResourceServer
 from bankofai.x402.http import HTTPFacilitatorClient, PaymentOption, FacilitatorConfig
 from bankofai.x402.http.middleware.fastapi import PaymentMiddlewareASGI
 from bankofai.x402.http.types import RouteConfig

@@ -31,7 +31,7 @@ TRON_PRIVATE_KEY = os.getenv("TRON_FACILITATOR_PRIVATE_KEY", os.getenv("TRON_PRI
 TRON_GRID_API_KEY = os.getenv("TRON_GRID_API_KEY", "")
 TRON_FULL_NODE = os.getenv("TRON_FULL_NODE", "https://nile.trongrid.io")
 
-BSC_PRIVATE_KEY = os.getenv("BSC_PRIVATE_KEY", "")
+BSC_PRIVATE_KEY = os.getenv("BSC_FACILITATOR_PRIVATE_KEY", os.getenv("BSC_PRIVATE_KEY", ""))
 BSC_TESTNET_RPC_URL = os.getenv("BSC_TESTNET_RPC_URL", "https://data-seed-prebsc-1-s1.binance.org:8545")
 
 FACILITATOR_PORT = int(os.getenv("FACILITATOR_PORT", "8001"))
