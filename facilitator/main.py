@@ -1,6 +1,7 @@
 """
 Facilitator Main Entry Point (x402 v2 Python SDK)
-Supports both TRON Nile and BSC Testnet.
+
+Data-driven network registration — add new chains by appending to NETWORKS.
 """
 
 import os
@@ -24,46 +25,78 @@ load_dotenv(Path(__file__).parent / ".env")
 load_dotenv(Path(__file__).parent.parent / ".env")
 
 # ---------------------------------------------------------------------------
-# Configuration
+# Network Configuration
 # ---------------------------------------------------------------------------
 
-TRON_PRIVATE_KEY = os.getenv("TRON_FACILITATOR_PRIVATE_KEY", os.getenv("TRON_PRIVATE_KEY", ""))
-TRON_GRID_API_KEY = os.getenv("TRON_GRID_API_KEY", "")
-TRON_FULL_NODE = os.getenv("TRON_FULL_NODE", "https://nile.trongrid.io")
-
-BSC_PRIVATE_KEY = os.getenv("BSC_PRIVATE_KEY", "")
-BSC_TESTNET_RPC_URL = os.getenv("BSC_TESTNET_RPC_URL", "https://data-seed-prebsc-1-s1.binance.org:8545")
+NETWORKS = [
+    # TRON
+    {
+        "type": "tron",
+        "network": "tron:mainnet",
+        "label": "TRON Mainnet",
+        "rpc_url": os.getenv("TRON_MAINNET_RPC_URL", "https://api.trongrid.io"),
+        "private_key_env": "TRON_MAINNET_PRIVATE_KEY",
+    },
+    {
+        "type": "tron",
+        "network": "tron:nile",
+        "label": "TRON Nile",
+        "rpc_url": os.getenv("TRON_NILE_RPC_URL", "https://nile.trongrid.io"),
+        "private_key_env": "TRON_NILE_PRIVATE_KEY",
+    },
+    # BSC
+    {
+        "type": "evm",
+        "network": "eip155:56",
+        "label": "BSC Mainnet",
+        "rpc_url": os.getenv("BSC_MAINNET_RPC_URL", "https://bsc-dataseed.binance.org"),
+        "private_key_env": "BSC_MAINNET_PRIVATE_KEY",
+    },
+    {
+        "type": "evm",
+        "network": "eip155:97",
+        "label": "BSC Testnet",
+        "rpc_url": os.getenv("BSC_TESTNET_RPC_URL", "https://data-seed-prebsc-1-s1.binance.org:8545"),
+        "private_key_env": "BSC_TESTNET_PRIVATE_KEY",
+    },
+]
 
 FACILITATOR_PORT = int(os.getenv("FACILITATOR_PORT", "8001"))
-
-if not TRON_PRIVATE_KEY and not BSC_PRIVATE_KEY:
-    raise ValueError("At least one of TRON_PRIVATE_KEY or BSC_PRIVATE_KEY is required")
 
 # ---------------------------------------------------------------------------
 # Initialize Facilitator
 # ---------------------------------------------------------------------------
 
 facilitator = x402FacilitatorSync()
+registered_networks: list[str] = []
 
-# Register TRON Nile
-if TRON_PRIVATE_KEY:
-    tron_signer = FacilitatorTronSigner(private_key=TRON_PRIVATE_KEY, full_node=TRON_FULL_NODE)
-    register_exact_tron_facilitator(facilitator, tron_signer, networks=["tron:nile"])
-    print(f"  [TRON] Facilitator Address: {tron_signer.address}")
+for net in NETWORKS:
+    private_key = os.getenv(net["private_key_env"], "")
+    if not private_key:
+        continue
 
-# Register BSC Testnet
-if BSC_PRIVATE_KEY:
-    bsc_signer = FacilitatorWeb3Signer(private_key=BSC_PRIVATE_KEY, rpc_url=BSC_TESTNET_RPC_URL)
-    register_exact_evm_facilitator(facilitator, bsc_signer, networks="eip155:97")
-    print(f"  [BSC]  Facilitator Address: {bsc_signer.address}")
+    if net["type"] == "tron":
+        signer = FacilitatorTronSigner(private_key=private_key, full_node=net["rpc_url"])
+        register_exact_tron_facilitator(facilitator, signer, networks=[net["network"]])
+        print(f"  [{net['label']}] Facilitator Address: {signer.address}")
+
+    elif net["type"] == "evm":
+        signer = FacilitatorWeb3Signer(private_key=private_key, rpc_url=net["rpc_url"])
+        register_exact_evm_facilitator(facilitator, signer, networks=net["network"])
+        print(f"  [{net['label']}] Facilitator Address: {signer.address}")
+
+    registered_networks.append(f"{net['network']} ({net['label']})")
+
+if not registered_networks:
+    raise ValueError(
+        "No networks registered. Set at least one private key: "
+        + ", ".join(net["private_key_env"] for net in NETWORKS)
+    )
 
 print("=" * 60)
 print("X402 Facilitator (Python / v2 SDK)")
 print("=" * 60)
-print(f"  Networks: " + ", ".join(filter(None, [
-    "tron:nile" if TRON_PRIVATE_KEY else "",
-    "eip155:97 (BSC Testnet)" if BSC_PRIVATE_KEY else "",
-])))
+print(f"  Networks: {', '.join(registered_networks)}")
 print("=" * 60)
 
 # ---------------------------------------------------------------------------
