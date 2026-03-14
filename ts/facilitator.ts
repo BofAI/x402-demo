@@ -13,6 +13,7 @@ import { createPublicClient, createWalletClient, http } from "viem";
 import { bscTestnet } from "viem/chains";
 import { privateKeyToAccount } from "viem/accounts";
 import { x402Facilitator } from "@bankofai/x402-core/facilitator";
+import { createTrc20ApprovalGasSponsoringExtension } from "@bankofai/x402-extensions";
 import { toFacilitatorEvmSigner } from "@bankofai/x402-evm";
 import { ExactEvmScheme as ExactEvmFacilitatorScheme } from "@bankofai/x402-evm/exact/facilitator";
 import { ExactTronScheme } from "@bankofai/x402-tron/exact/facilitator";
@@ -66,6 +67,15 @@ for (const net of TRON_NETWORKS) {
   const signer = createFacilitatorTronSigner(tw, TRON_PRIVATE_KEY);
 
   facilitator.register(`tron:${net.name}`, new ExactTronScheme(signer));
+  if (signer.sendRawTransaction && signer.getSignWeight) {
+    facilitator.registerExtension(
+      createTrc20ApprovalGasSponsoringExtension({
+        ...signer,
+        sendRawTransaction: args => signer.sendRawTransaction!(args as never),
+        getSignWeight: args => signer.getSignWeight!(args as never),
+      }),
+    );
+  }
   console.log(`[facilitator] Registered exact scheme for tron:${net.name}`);
 }
 

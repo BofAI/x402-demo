@@ -42,6 +42,25 @@ export function createClientTronSigner(
       if (!method) throw new Error(`Method ${args.functionName} not found on contract ${args.address}`);
       return method(...args.args).call();
     },
+
+    async buildTriggerSmartContractTransaction(args) {
+      const built = await tronWeb.transactionBuilder.triggerSmartContract(
+        args.contractAddress,
+        args.functionSelector,
+        {
+          feeLimit: args.feeLimit,
+          callValue: args.callValue ?? 0,
+        },
+        args.parameters,
+        args.issuerAddress ?? addr,
+      );
+      return built.transaction;
+    },
+
+    async signTransaction(transaction) {
+      const cleanKey = privateKey.replace(/^0x/, "");
+      return tronWeb.trx.sign(transaction, cleanKey);
+    },
   };
 }
 
@@ -132,6 +151,15 @@ export function createFacilitatorTronSigner(
         await new Promise((r) => setTimeout(r, interval));
       }
       throw new Error(`Transaction ${args.hash} not confirmed after ${maxAttempts * interval / 1000}s`);
+    },
+
+    async sendRawTransaction(args) {
+      const result = await tronWeb.trx.sendRawTransaction(args.signedTransaction);
+      return String(result.txid ?? result.transaction?.txID ?? "");
+    },
+
+    async getSignWeight(args) {
+      return tronWeb.trx.getSignWeight(args.transaction);
     },
   };
 }
