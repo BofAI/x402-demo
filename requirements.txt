@@ -20,7 +20,7 @@
 # It must track the x402 repo tag that contains the current Python v2 SDK
 # sync exports and TRON/EVM extras. For external fallback installs, use the
 # pinned release tag below rather than a moving branch.
-bankofai.x402[tron,evm] @ git+https://github.com/BofAI/x402.git@v2.6.0-b10#subdirectory=python/x402
+bankofai.x402[tron,evm] @ git+https://github.com/BofAI/x402.git@v2.6.0-b11#subdirectory=python/x402
 
 # Web framework
 fastapi>=0.104.0
