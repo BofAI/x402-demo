@@ -12,7 +12,11 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { x402ResourceServer } from "@bankofai/x402-core/server";
 import { HTTPFacilitatorClient } from "@bankofai/x402-core/http";
-import { declareTrc20ApprovalGasSponsoringExtension } from "@bankofai/x402-extensions";
+import {
+  declareEip2612GasSponsoringExtension,
+  declareErc20ApprovalGasSponsoringExtension,
+  declareTrc20ApprovalGasSponsoringExtension,
+} from "@bankofai/x402-extensions";
 import { ExactTronScheme } from "@bankofai/x402-tron/exact/server";
 import { ExactEvmScheme } from "@bankofai/x402-evm/exact/server";
 import { encodePaymentRequiredHeader, decodePaymentSignatureHeader } from "@bankofai/x402-core/http";
@@ -41,6 +45,10 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const DEMO_IMAGE_PATH = resolve(__dirname, "../server/protected.png");
 const DEMO_IMAGE_MIME_TYPE = "image/png";
 const TRON_PERMIT2_EXTENSIONS = declareTrc20ApprovalGasSponsoringExtension();
+const EVM_PERMIT2_EXTENSIONS = {
+  ...declareEip2612GasSponsoringExtension(),
+  ...declareErc20ApprovalGasSponsoringExtension(),
+};
 
 function encodeToBase64(obj: unknown): string {
   return Buffer.from(JSON.stringify(obj)).toString("base64");
@@ -212,13 +220,19 @@ async function initServer() {
         const paymentHeader = req.headers["payment-signature"] as string | undefined;
 
         if (!paymentHeader) {
+          const routeExtensions =
+            endpoint.path === "/protected-nile"
+              ? TRON_PERMIT2_EXTENSIONS
+              : endpoint.path === "/protected-bsc-testnet"
+                ? EVM_PERMIT2_EXTENSIONS
+                : endpoint.path === "/protected-multi"
+                  ? { ...TRON_PERMIT2_EXTENSIONS, ...EVM_PERMIT2_EXTENSIONS }
+                  : undefined;
           const paymentRequired = await resourceServer.createPaymentRequiredResponse(
             requirements,
             { url: endpoint.path, description: endpoint.label, mimeType: DEMO_IMAGE_MIME_TYPE },
             undefined,
-            endpoint.path === "/protected-nile" || endpoint.path === "/protected-multi"
-              ? TRON_PERMIT2_EXTENSIONS
-              : undefined,
+            routeExtensions,
           );
           res.setHeader("PAYMENT-REQUIRED", encodePaymentRequiredHeader(paymentRequired));
           res.status(402).json(paymentRequired);

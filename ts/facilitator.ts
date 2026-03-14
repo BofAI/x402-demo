@@ -13,7 +13,10 @@ import { createPublicClient, createWalletClient, http } from "viem";
 import { bscTestnet } from "viem/chains";
 import { privateKeyToAccount } from "viem/accounts";
 import { x402Facilitator } from "@bankofai/x402-core/facilitator";
-import { createTrc20ApprovalGasSponsoringExtension } from "@bankofai/x402-extensions";
+import {
+  createErc20ApprovalGasSponsoringExtension,
+  createTrc20ApprovalGasSponsoringExtension,
+} from "@bankofai/x402-extensions";
 import { toFacilitatorEvmSigner } from "@bankofai/x402-evm";
 import { ExactEvmScheme as ExactEvmFacilitatorScheme } from "@bankofai/x402-evm/exact/facilitator";
 import { ExactTronScheme } from "@bankofai/x402-tron/exact/facilitator";
@@ -132,6 +135,7 @@ if (BSC_FACILITATOR_PRIVATE_KEY && BSC_TESTNET_RPC_URL) {
   });
 
   facilitator.register("eip155:97", new ExactEvmFacilitatorScheme(signer));
+  facilitator.registerExtension(createErc20ApprovalGasSponsoringExtension(signer, walletClient));
   console.log("[facilitator] Registered exact scheme for eip155:97");
 }
 
