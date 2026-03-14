@@ -111,10 +111,8 @@ BSC_CLIENT_PRIVATE_KEY=<your_bsc_testnet_client_private_key>
 BSC_FACILITATOR_PRIVATE_KEY=<your_bsc_testnet_facilitator_private_key>
 BSC_PAY_TO=<your_bsc_recipient_address>
 BSC_TESTNET_RPC_URL=<your_bsc_testnet_rpc>
-BSC_TEST_ASSET=0x375cADdd2cB68cE82e3D9B075D551067a7b4B816
-BSC_TEST_ASSET_NAME=DA HULU
-BSC_TEST_ASSET_VERSION=1
-BSC_TEST_AMOUNT=1000
+BSC_TEST_PRICE=0.0001
+BSC_TEST_ASSETS=USDT,USDC
 ```
 
 For BSC demo runs, prefer a stable RPC provider. Public endpoints with strict rate limits can cause settlement to fail even when the payment payload is valid.
@@ -165,7 +163,7 @@ To exercise the optional BSC endpoint:
 ENDPOINT=/protected-bsc-testnet ./start.sh ts-client
 ```
 
-This path expects the BSC variables above to be filled and currently uses the DHLU test token on `eip155:97`.
+This path expects the BSC variables above to be filled and by default accepts public BSC testnet `USDT` and `USDC` via the built-in asset registry on `eip155:97`.
 
 To exercise a single endpoint that advertises both TRON and BSC, use:
 

@@ -4,7 +4,7 @@
 
 The TypeScript resource server in [`ts/server.ts`](./ts/server.ts) exposes payment-protected
 endpoints using `x402ResourceServer`. After settlement, each protected endpoint serves the shared
-demo image in [`assets/openclaw.jpg`](./assets/openclaw.jpg).
+demo image in [`server/protected.png`](./server/protected.png).
 
 It currently supports:
 
@@ -27,10 +27,8 @@ Optional BSC endpoint configuration:
 ```env
 BSC_PAY_TO=<your_bsc_recipient_address>
 BSC_TESTNET_RPC_URL=<your_bsc_testnet_rpc>
-BSC_TEST_ASSET=<your_bsc_test_asset>
-BSC_TEST_ASSET_NAME=DA HULU
-BSC_TEST_ASSET_VERSION=1
-BSC_TEST_AMOUNT=1000
+BSC_TEST_PRICE=0.0001
+BSC_TEST_ASSETS=USDT,USDC
 ```
 
 Optional retry tuning:
@@ -62,7 +60,7 @@ restart when the facilitator comes up late.
 1. Unpaid request returns `402 Payment Required`.
 2. The response contains one or more `accepts` entries.
 3. The client retries with a payment payload in `payment-signature`.
-4. The server verifies and settles through the facilitator, then returns the protected JPEG body.
+4. The server verifies and settles through the facilitator, then returns the protected PNG body.
 
 ## Troubleshooting
 

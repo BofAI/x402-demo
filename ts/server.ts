@@ -27,10 +27,11 @@ if (!PAY_TO_ADDRESS) {
   process.exit(1);
 }
 const BSC_PAY_TO_ADDRESS = process.env.BSC_PAY_TO;
-const BSC_TEST_ASSET = process.env.BSC_TEST_ASSET;
-const BSC_TEST_ASSET_NAME = process.env.BSC_TEST_ASSET_NAME ?? "DA HULU";
-const BSC_TEST_ASSET_VERSION = process.env.BSC_TEST_ASSET_VERSION ?? "1";
-const BSC_TEST_AMOUNT = process.env.BSC_TEST_AMOUNT ?? "1000";
+const BSC_TEST_PRICE = process.env.BSC_TEST_PRICE ?? "0.0001";
+const BSC_TEST_ASSETS = (process.env.BSC_TEST_ASSETS ?? "USDT,USDC")
+  .split(",")
+  .map(asset => asset.trim())
+  .filter(Boolean);
 
 const PORT = Number(process.env.SERVER_PORT ?? 8000);
 const FACILITATOR_URL = process.env.FACILITATOR_URL ?? "http://localhost:8001";
@@ -53,6 +54,7 @@ interface EndpointConfig {
     scheme: string;
     network: Network;
     payTo: string;
+    assets?: string[];
     price:
       | string
       | {
@@ -79,7 +81,7 @@ const ENDPOINTS: EndpointConfig[] = [
   },
 ];
 
-if (BSC_PAY_TO_ADDRESS && BSC_TEST_ASSET) {
+if (BSC_PAY_TO_ADDRESS && BSC_TEST_ASSETS.length > 0) {
   ENDPOINTS.push({
     path: "/protected-bsc-testnet",
     prices: [
@@ -87,17 +89,11 @@ if (BSC_PAY_TO_ADDRESS && BSC_TEST_ASSET) {
         scheme: "exact",
         network: "eip155:97",
         payTo: BSC_PAY_TO_ADDRESS,
-        price: {
-          amount: BSC_TEST_AMOUNT,
-          asset: BSC_TEST_ASSET,
-          extra: {
-            name: BSC_TEST_ASSET_NAME,
-            version: BSC_TEST_ASSET_VERSION,
-          },
-        },
+        price: BSC_TEST_PRICE,
+        assets: BSC_TEST_ASSETS,
       },
     ],
-    label: `BSC Testnet (${BSC_TEST_AMOUNT} ${BSC_TEST_ASSET_NAME})`,
+    label: `BSC Testnet (${BSC_TEST_PRICE} ${BSC_TEST_ASSETS.join(" or ")})`,
   });
 
   ENDPOINTS.push({
@@ -113,17 +109,11 @@ if (BSC_PAY_TO_ADDRESS && BSC_TEST_ASSET) {
         scheme: "exact",
         network: "eip155:97",
         payTo: BSC_PAY_TO_ADDRESS,
-        price: {
-          amount: BSC_TEST_AMOUNT,
-          asset: BSC_TEST_ASSET,
-          extra: {
-            name: BSC_TEST_ASSET_NAME,
-            version: BSC_TEST_ASSET_VERSION,
-          },
-        },
+        price: BSC_TEST_PRICE,
+        assets: BSC_TEST_ASSETS,
       },
     ],
-    label: `Multi-network (TRON Nile or BSC Testnet ${BSC_TEST_ASSET_NAME})`,
+    label: `Multi-network (TRON Nile or BSC Testnet ${BSC_TEST_ASSETS.join("/")})`,
   });
 }
 
@@ -137,7 +127,7 @@ const resourceServer = new x402ResourceServer(facilitatorClient);
 // Register TRON exact scheme for the Nile demo network
 const tronScheme = new ExactTronScheme();
 resourceServer.register("tron:nile", tronScheme);
-if (BSC_PAY_TO_ADDRESS && BSC_TEST_ASSET) {
+if (BSC_PAY_TO_ADDRESS && BSC_TEST_ASSETS.length > 0) {
   resourceServer.register("eip155:97", new ExactEvmScheme());
 }
 

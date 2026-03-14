@@ -14,7 +14,6 @@ from bankofai.x402.http.middleware.fastapi import PaymentMiddlewareASGI
 from bankofai.x402.http.types import RouteConfig
 from bankofai.x402.mechanisms.evm.exact import ExactEvmServerScheme
 from bankofai.x402.mechanisms.tron import ExactTronServerScheme
-from bankofai.x402.schemas import AssetAmount
 
 # ---------------------------------------------------------------------------
 # Logging Configuration
@@ -40,10 +39,8 @@ FACILITATOR_URL = os.getenv("FACILITATOR_URL", "http://localhost:8001")
 SERVER_PORT = int(os.getenv("SERVER_PORT", "8000"))
 TRON_PRICE = os.getenv("TRON_PROTECTED_PRICE", "100")
 
-BSC_TEST_ASSET = os.getenv("BSC_TEST_ASSET", "")
-BSC_TEST_ASSET_NAME = os.getenv("BSC_TEST_ASSET_NAME", "DA HULU")
-BSC_TEST_ASSET_VERSION = os.getenv("BSC_TEST_ASSET_VERSION", "1")
-BSC_TEST_AMOUNT = os.getenv("BSC_TEST_AMOUNT", "1000")
+BSC_TEST_PRICE = os.getenv("BSC_TEST_PRICE", "0.0001")
+BSC_TEST_ASSETS = [asset.strip() for asset in os.getenv("BSC_TEST_ASSETS", "USDT,USDC").split(",") if asset.strip()]
 
 if not TRON_PAY_TO and not BSC_PAY_TO:
     raise ValueError("PAY_TO_ADDRESS (TRON) or BSC_PAY_TO (EVM) environment variable is required")
@@ -115,20 +112,14 @@ if TRON_PAY_TO:
     )
 
 accepts_bsc = []
-if BSC_PAY_TO and BSC_TEST_ASSET:
+if BSC_PAY_TO and BSC_TEST_ASSETS:
     accepts_bsc.append(
         PaymentOption(
             scheme="exact",
             network="eip155:97",
             pay_to=BSC_PAY_TO,
-            price=AssetAmount(
-                amount=BSC_TEST_AMOUNT,
-                asset=BSC_TEST_ASSET,
-                extra={
-                    "name": BSC_TEST_ASSET_NAME,
-                    "version": BSC_TEST_ASSET_VERSION
-                }
-            )
+            price=BSC_TEST_PRICE,
+            assets=BSC_TEST_ASSETS,
         )
     )
 

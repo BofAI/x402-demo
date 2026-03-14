@@ -5,7 +5,7 @@
 The current acceptance path uses the TypeScript v2 client in [`ts/client.ts`](./ts/client.ts).
 It requests a protected demo endpoint, handles the `402 Payment Required` challenge, signs the
 selected payment requirement, and retries the request with the payment payload. Successful demo
-requests return the protected `openclaw.jpg` asset.
+requests return the protected `protected.png` asset.
 
 ## Supported Demo Paths
 
