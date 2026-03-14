@@ -6,14 +6,19 @@ Supports TRON Nile and BSC Testnet.
 import os
 import json
 import base64
+import time
 from pathlib import Path
 from tempfile import gettempdir
 
 from dotenv import load_dotenv
 from eth_account import Account
 from tronpy import Tron
+from tronpy.keys import PrivateKey
 
 from bankofai.x402 import x402ClientSync
+from bankofai.x402.mechanisms.evm.constants import ERC20_ALLOWANCE_ABI
+from bankofai.x402.mechanisms.evm.signers import FacilitatorWeb3Signer
+from bankofai.x402.mechanisms.evm.constants import PERMIT2_ADDRESSES as EVM_PERMIT2_ADDRESSES
 from bankofai.x402.mechanisms.tron.constants import PERMIT2_ADDRESSES
 from bankofai.x402.mechanisms.evm import EthAccountSigner
 from bankofai.x402.mechanisms.evm.exact import register_exact_evm_client
@@ -32,6 +37,7 @@ load_dotenv(Path(__file__).parent.parent.parent / ".env")
 
 TRON_PRIVATE_KEY = os.getenv("TRON_CLIENT_PRIVATE_KEY", os.getenv("TRON_PRIVATE_KEY", ""))
 BSC_PRIVATE_KEY = os.getenv("BSC_CLIENT_PRIVATE_KEY", os.getenv("BSC_PRIVATE_KEY", ""))
+BSC_TESTNET_RPC_URL = os.getenv("BSC_TESTNET_RPC_URL", "")
 
 SERVER_URL = os.getenv("SERVER_URL", "http://localhost:8000")
 ENDPOINT = os.getenv("ENDPOINT", "/protected")
@@ -47,6 +53,20 @@ if not PREFERRED_NETWORK:
 
 if not TRON_PRIVATE_KEY and not BSC_PRIVATE_KEY:
     raise ValueError("At least one of TRON_CLIENT_PRIVATE_KEY or BSC_CLIENT_PRIVATE_KEY is required")
+
+MAX_UINT256 = 2**256 - 1
+ERC20_APPROVE_ABI = [
+    {
+        "inputs": [
+            {"name": "spender", "type": "address"},
+            {"name": "amount", "type": "uint256"},
+        ],
+        "name": "approve",
+        "outputs": [{"name": "", "type": "bool"}],
+        "stateMutability": "nonpayable",
+        "type": "function",
+    }
+]
 
 
 def decode_base64_json(encoded: str) -> dict:
@@ -71,6 +91,19 @@ def save_image_response(content: bytes, content_type: str) -> str:
     output_path = Path(gettempdir()) / f"x402_{os.getpid()}_{Path.cwd().name}.{ext}"
     output_path.write_bytes(content)
     return str(output_path)
+
+
+def select_requirement(payment_required):
+    accepts = getattr(payment_required, "accepts", None) or []
+    if not accepts:
+        raise ValueError("No payment requirements available")
+
+    if PREFERRED_NETWORK:
+        for requirement in accepts:
+            if requirement.network == PREFERRED_NETWORK:
+                return requirement
+
+    return accepts[0]
 
 
 def print_accepts(payment_required) -> None:
@@ -177,6 +210,87 @@ def print_response_body(response) -> None:
     except Exception:
         print(truncate_text(body_text))
 
+
+def ensure_tron_permit2_approval(requirement, tron_private_key: str, owner_address: str) -> None:
+    extra = requirement.extra or {}
+    if extra.get("assetTransferMethod") != "permit2":
+        return
+
+    permit2_address = PERMIT2_ADDRESSES.get(requirement.network)
+    if not permit2_address:
+        raise ValueError(f"No Permit2 configured for {requirement.network}")
+
+    client = Tron(network="nile")
+    contract = client.get_contract(requirement.asset)
+    allowance = int(contract.functions.allowance(owner_address, permit2_address))
+    required = int(str(requirement.amount))
+    if allowance >= required:
+        return
+
+    print(f"\nAuto-approving TRON Permit2: {allowance} < {required}")
+    private_key = PrivateKey(bytes.fromhex(tron_private_key.removeprefix("0x")))
+    tx = (
+        contract.functions.approve(permit2_address, MAX_UINT256)
+        .with_owner(owner_address)
+        .fee_limit(1_000_000_000)
+        .build()
+        .sign(private_key)
+    )
+    result = tx.broadcast()
+    txid = str(result.txid)
+    print(f"  approval tx: {txid}")
+    for _ in range(30):
+        try:
+            info = client.get_transaction_info(txid)
+            if info.get("receipt", {}).get("result") == "SUCCESS":
+                return
+            if info.get("receipt", {}).get("result"):
+                raise RuntimeError(f"TRON approval transaction failed: {txid}")
+        except Exception:
+            pass
+        time.sleep(1)
+    raise RuntimeError(f"TRON approval transaction not confirmed: {txid}")
+
+
+def ensure_evm_permit2_approval(requirement, evm_private_key: str, owner_address: str) -> None:
+    extra = requirement.extra or {}
+    if extra.get("assetTransferMethod") != "permit2":
+        return
+
+    if not BSC_TESTNET_RPC_URL:
+        raise ValueError("BSC_TESTNET_RPC_URL is required for EVM permit2 approval")
+
+    permit2_address = EVM_PERMIT2_ADDRESSES.get(requirement.network)
+    if not permit2_address:
+        raise ValueError(f"No Permit2 configured for {requirement.network}")
+
+    signer = FacilitatorWeb3Signer(evm_private_key, BSC_TESTNET_RPC_URL)
+    allowance = int(
+        signer.read_contract(
+            requirement.asset,
+            ERC20_ALLOWANCE_ABI,
+            "allowance",
+            owner_address,
+            permit2_address,
+        )
+    )
+    required = int(str(requirement.amount))
+    if allowance >= required:
+        return
+
+    print(f"\nAuto-approving EVM Permit2: {allowance} < {required}")
+    tx_hash = signer.write_contract(
+        requirement.asset,
+        ERC20_APPROVE_ABI,
+        "approve",
+        permit2_address,
+        MAX_UINT256,
+    )
+    print(f"  approval tx: {tx_hash}")
+    receipt = signer.wait_for_transaction_receipt(tx_hash)
+    if receipt.status != 1:
+        raise RuntimeError(f"EVM approval transaction failed: {tx_hash}")
+
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
@@ -233,6 +347,19 @@ def main():
         get_header = lambda h: response.headers.get(h)
         payment_required = payment_client.get_payment_required_response(get_header, response.content)
         print_accepts(payment_required)
+        selected = select_requirement(payment_required)
+        if selected.network.startswith("tron:") and tron_signer:
+            ensure_tron_permit2_approval(selected, TRON_PRIVATE_KEY, tron_signer.address)
+        elif selected.network.startswith("eip155:") and BSC_PRIVATE_KEY:
+            if not BSC_PRIVATE_KEY.startswith("0x"):
+                normalized_bsc_private_key = "0x" + BSC_PRIVATE_KEY
+            else:
+                normalized_bsc_private_key = BSC_PRIVATE_KEY
+            ensure_evm_permit2_approval(
+                selected,
+                normalized_bsc_private_key,
+                Account.from_key(normalized_bsc_private_key).address,
+            )
         
         payment_payload = client.create_payment_payload(payment_required)
         print(f"Payment created: scheme={payment_payload.accepted.scheme} network={payment_payload.accepted.network}")

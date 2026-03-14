@@ -13,10 +13,19 @@ import { join } from "node:path";
 import { x402Client } from "@bankofai/x402-core/client";
 import { encodePaymentSignatureHeader } from "@bankofai/x402-core/http";
 import { safeBase64Decode } from "@bankofai/x402-core/utils";
-import { toClientEvmSigner } from "@bankofai/x402-evm";
+import {
+  createPermit2ApprovalTx as createEvmPermit2ApprovalTx,
+  getPermit2AllowanceReadParams as getEvmPermit2AllowanceReadParams,
+  toClientEvmSigner,
+} from "@bankofai/x402-evm";
 import { ExactEvmScheme } from "@bankofai/x402-evm/exact/client";
-import { ExactTronScheme } from "@bankofai/x402-tron/exact/client";
-import { createPublicClient, http } from "viem";
+import {
+  createPermit2ApprovalTx as createTronPermit2ApprovalTx,
+  getPermit2AllowanceReadParams as getTronPermit2AllowanceReadParams,
+  ExactTronScheme,
+  PERMIT2_ADDRESSES as TRON_PERMIT2_ADDRESSES,
+} from "@bankofai/x402-tron";
+import { createPublicClient, createWalletClient, http } from "viem";
 import { bscTestnet } from "viem/chains";
 import { privateKeyToAccount } from "viem/accounts";
 import { createClientTronSigner } from "./signers.js";
@@ -43,6 +52,7 @@ const PREFERRED_NETWORK = process.env.PREFERRED_NETWORK;
 // ---------------------------------------------------------------------------
 
 const hr = () => console.log("─".repeat(60));
+const MAX_UINT256 = BigInt("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
 
 function normalizeHexPrivateKey(privateKey: string): `0x${string}` {
   return (privateKey.startsWith("0x") ? privateKey : `0x${privateKey}`) as `0x${string}`;
@@ -63,6 +73,103 @@ async function saveImage(response: Response): Promise<string> {
   const outputPath = join(tmpdir(), `x402_${Date.now()}.${ext}`);
   writeFileSync(outputPath, imageBuffer);
   return outputPath;
+}
+
+function extractTronBroadcastTransactionId(result: { txid?: string; transaction?: { txID?: string } }): string {
+  const txid = result.txid ?? result.transaction?.txID;
+  if (!txid) {
+    throw new Error("TRON approval broadcast did not return a transaction id");
+  }
+  return txid;
+}
+
+async function waitForTronTransaction(tronWeb: TronWeb, hash: string): Promise<void> {
+  void tronWeb;
+  void hash;
+  await new Promise((resolve) => setTimeout(resolve, 6000));
+}
+
+async function ensureTronPermit2Approval(args: {
+  tronWeb: TronWeb;
+  ownerAddress: string;
+  requirement: any;
+}): Promise<void> {
+  const { tronWeb, ownerAddress, requirement } = args;
+  if (requirement.extra?.assetTransferMethod !== "permit2") {
+    return;
+  }
+
+  const readParams = getTronPermit2AllowanceReadParams({
+    tokenAddress: requirement.asset,
+    ownerAddress,
+    network: requirement.network,
+  });
+  const contract = await tronWeb.contract().at(readParams.address);
+  const allowance = BigInt((await contract.allowance(...readParams.args).call()).toString());
+  const required = BigInt(requirement.amount);
+  if (allowance >= required) {
+    return;
+  }
+
+  const spender = TRON_PERMIT2_ADDRESSES[requirement.network];
+  if (!spender) {
+    throw new Error(`No TRON Permit2 configured for ${requirement.network}`);
+  }
+
+  console.log(`\nAuto-approving TRON Permit2: ${allowance.toString()} < ${required.toString()}`);
+  createTronPermit2ApprovalTx(requirement.asset, requirement.network);
+  const approval = await tronWeb.transactionBuilder.triggerSmartContract(
+    requirement.asset,
+    "approve(address,uint256)",
+    {
+      feeLimit: 1_000_000_000,
+      callValue: 0,
+    },
+    [
+      { type: "address", value: spender },
+      { type: "uint256", value: MAX_UINT256.toString() },
+    ],
+    ownerAddress,
+  );
+  const signed = await tronWeb.trx.sign(approval.transaction);
+  const sent = await tronWeb.trx.sendRawTransaction(signed);
+  const txid = extractTronBroadcastTransactionId(sent as { txid?: string; transaction?: { txID?: string } });
+  console.log(`  approval tx: ${txid}`);
+  await waitForTronTransaction(tronWeb, txid);
+}
+
+async function ensureEvmPermit2Approval(args: {
+  publicClient: ReturnType<typeof createPublicClient>;
+  walletClient: ReturnType<typeof createWalletClient>;
+  account: ReturnType<typeof privateKeyToAccount>;
+  requirement: any;
+}): Promise<void> {
+  const { publicClient, walletClient, account, requirement } = args;
+  if (requirement.extra?.assetTransferMethod !== "permit2") {
+    return;
+  }
+
+  const readParams = getEvmPermit2AllowanceReadParams({
+    tokenAddress: requirement.asset as `0x${string}`,
+    ownerAddress: account.address,
+    network: requirement.network,
+  });
+  const allowance = await publicClient.readContract(readParams);
+  const required = BigInt(requirement.amount);
+  if (allowance >= required) {
+    return;
+  }
+
+  console.log(`\nAuto-approving EVM Permit2: ${allowance.toString()} < ${required.toString()}`);
+  const approvalTx = createEvmPermit2ApprovalTx(requirement.asset as `0x${string}`, requirement.network);
+  const txHash = await walletClient.sendTransaction({
+    account,
+    chain: bscTestnet,
+    to: approvalTx.to,
+    data: approvalTx.data,
+  });
+  console.log(`  approval tx: ${txHash}`);
+  await publicClient.waitForTransactionReceipt({ hash: txHash });
 }
 
 function selectPaymentRequirements(preferredNetwork?: string) {
@@ -98,13 +205,26 @@ async function main() {
 
   // Create client signer
   const signer = createClientTronSigner(tw, tronPrivateKey);
+  const ownerTronAddress = signer.address;
+  let evmAccount: ReturnType<typeof privateKeyToAccount> | undefined;
+  let publicClient: ReturnType<typeof createPublicClient> | undefined;
+  let walletClient: ReturnType<typeof createWalletClient> | undefined;
 
   hr();
   console.log("X402 Client (TypeScript · New SDK)");
   hr();
   console.log(`  TRON Address: ${signer.address}`);
   if (BSC_CLIENT_PRIVATE_KEY && BSC_TESTNET_RPC_URL) {
-    const evmAccount = privateKeyToAccount(normalizeHexPrivateKey(BSC_CLIENT_PRIVATE_KEY));
+    evmAccount = privateKeyToAccount(normalizeHexPrivateKey(BSC_CLIENT_PRIVATE_KEY));
+    publicClient = createPublicClient({
+      chain: bscTestnet,
+      transport: http(BSC_TESTNET_RPC_URL),
+    });
+    walletClient = createWalletClient({
+      chain: bscTestnet,
+      transport: http(BSC_TESTNET_RPC_URL),
+      account: evmAccount,
+    });
     console.log(`  BSC Address:  ${evmAccount.address}`);
   }
   if (PREFERRED_NETWORK) {
@@ -116,12 +236,7 @@ async function main() {
   // Initialize x402 client
   const client = new x402Client(selectPaymentRequirements(PREFERRED_NETWORK));
   client.register("tron:*", new ExactTronScheme(signer));
-  if (BSC_CLIENT_PRIVATE_KEY && BSC_TESTNET_RPC_URL) {
-    const evmAccount = privateKeyToAccount(normalizeHexPrivateKey(BSC_CLIENT_PRIVATE_KEY));
-    const publicClient = createPublicClient({
-      chain: bscTestnet,
-      transport: http(BSC_TESTNET_RPC_URL),
-    });
+  if (evmAccount && publicClient) {
     client.register("eip155:*", new ExactEvmScheme(toClientEvmSigner(evmAccount, publicClient)));
   }
 
@@ -146,6 +261,24 @@ async function main() {
   console.log(`  Accepts: ${accepts.length} option(s)`);
   for (const a of accepts) {
     console.log(`    - scheme=${a.scheme} network=${a.network} amount=${a.amount} asset=${a.asset}`);
+  }
+  const selected =
+    (PREFERRED_NETWORK
+      ? accepts.find((req) => req.network === PREFERRED_NETWORK)
+      : undefined) ?? accepts[0];
+  if (selected?.network?.startsWith("tron:")) {
+    await ensureTronPermit2Approval({
+      tronWeb: tw,
+      ownerAddress: ownerTronAddress,
+      requirement: selected,
+    });
+  } else if (selected?.network?.startsWith("eip155:") && evmAccount && publicClient && walletClient) {
+    await ensureEvmPermit2Approval({
+      publicClient,
+      walletClient,
+      account: evmAccount,
+      requirement: selected,
+    });
   }
 
   // Use x402Client to create payment payload
