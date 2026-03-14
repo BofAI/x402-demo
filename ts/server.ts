@@ -196,6 +196,7 @@ async function initServer() {
       network: p.network,
       payTo: p.payTo,
       maxTimeoutSeconds: 300,
+      assets: p.assets,
     }));
 
     app.get(endpoint.path, async (req, res) => {
@@ -246,6 +247,10 @@ async function initServer() {
 
         // Add settlement header
         res.setHeader("payment-response", encodeToBase64(settleResult));
+        if (!settleResult.success) {
+          res.status(402).json({ error: "Payment settlement failed", details: settleResult });
+          return;
+        }
         res.setHeader("x-demo-network", matchedReq.network);
         res.setHeader("x-demo-endpoint", endpoint.path);
         requestCount++;
