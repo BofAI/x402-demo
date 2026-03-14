@@ -54,10 +54,13 @@ def build_client(private_key: str) -> x402ClientSync:
 
     tron_signer = ClientTronSigner(private_key=private_key)
     register_exact_tron_client(client, tron_signer)
+    print(f"  TRON address: {tron_signer.address}")
 
     pk = private_key if private_key.startswith("0x") else "0x" + private_key
-    evm_signer = EthAccountSigner(Account.from_key(pk))
+    account = Account.from_key(pk)
+    evm_signer = EthAccountSigner(account)
     register_exact_evm_client(client, evm_signer)
+    print(f"  EVM  address: {account.address}")
 
     return client
 
