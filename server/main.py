@@ -33,21 +33,8 @@ load_dotenv(Path(__file__).parent.parent / ".env")
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
-TRON_PAY_TO = os.getenv("PAY_TO_ADDRESS", "")          # TRON Base58Check
-BSC_PAY_TO = os.getenv("BSC_PAY_TO", "")               # EVM hex
 FACILITATOR_URL = os.getenv("FACILITATOR_URL", "http://localhost:8001")
 SERVER_PORT = int(os.getenv("SERVER_PORT", "8000"))
-TRON_PRICE = os.getenv("TRON_PROTECTED_PRICE", "100")
-
-BSC_TEST_PRICE = os.getenv("BSC_TEST_PRICE", "0.0001")
-BSC_TEST_ASSETS = [asset.strip() for asset in os.getenv("BSC_TEST_ASSETS", "USDT,USDC").split(",") if asset.strip()]
-
-if not TRON_PAY_TO and not BSC_PAY_TO:
-    raise ValueError("PAY_TO_ADDRESS (TRON) or BSC_PAY_TO (EVM) environment variable is required")
-
-logger.info(f"Starting x402-demo server on port {SERVER_PORT}")
-logger.debug(f"TRON PayTo: {TRON_PAY_TO}")
-logger.debug(f"EVM/BSC PayTo: {BSC_PAY_TO}")
 
 DEMO_IMAGE_PATH = Path(__file__).resolve().parent / "protected.png"
 DEMO_IMAGE_MEDIA_TYPE = "image/png"
@@ -56,20 +43,142 @@ if not DEMO_IMAGE_PATH.exists():
     raise FileNotFoundError(f"Missing demo image: {DEMO_IMAGE_PATH}")
 
 # ---------------------------------------------------------------------------
-# Initialize Resource Server 
+# Network Configurations
+# ---------------------------------------------------------------------------
+# To add a new network, just append a new entry here. No other code changes needed.
+#
+# Required fields:
+#   network_id     - chain identifier (e.g. "tron:nile", "eip155:97")
+#   scheme_class   - server scheme class to register
+#   pay_to_env     - env var name for the pay-to address
+#   route_suffix   - URL path suffix (route becomes /protected-{suffix})
+#   description    - human-readable route description
+#   payment_kwargs - extra kwargs passed to PaymentOption (price, assets, etc.)
+#
+NETWORK_CONFIGS = [
+    {
+        "network_id": "tron:nile",
+        "scheme_class": ExactTronServerScheme,
+        "pay_to_env": "TRON_NILE_PAY_TO",
+        "route_suffix": "nile",
+        "description": "TRON Nile protected demo image",
+        "payment_kwargs": {
+            "price": {
+                "amount": os.getenv("TRON_PROTECTED_PRICE", "0.01"),
+                "asset": "TXYZopYRdj2D9XRtbG411XZZ3kM5VkAeBf",
+                "extra": {
+                    "name": "Tether USD",
+                    "version": "1",
+                    "assetTransferMethod": "permit2",
+                },
+            },
+        },
+    },
+    {
+        "network_id": "eip155:97",
+        "scheme_class": ExactEvmServerScheme,
+        "pay_to_env": "BSC_TESTNET_PAY_TO",
+        "route_suffix": "bsc-testnet",
+        "description": "BSC testnet protected demo image",
+        "payment_kwargs": {
+            "price": os.getenv("BSC_TEST_PRICE", "0.01"),
+            "assets": [
+                a.strip()
+                for a in os.getenv("BSC_TEST_ASSETS", "USDT,USDC").split(",")
+                if a.strip()
+            ],
+        },
+    },
+    # --- Mainnet ---
+    {
+        "network_id": "tron:mainnet",
+        "scheme_class": ExactTronServerScheme,
+        "pay_to_env": "TRON_MAINNET_PAY_TO",
+        "route_suffix": "tron-mainnet",
+        "description": "TRON Mainnet protected demo image",
+        "payment_kwargs": {
+            "price": {
+                "amount": os.getenv("TRON_MAINNET_PRICE", "0.01"),
+                "asset": "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t",
+                "extra": {
+                    "name": "Tether USD",
+                    "version": "1",
+                    "assetTransferMethod": "permit2",
+                },
+            },
+        },
+    },
+    {
+        "network_id": "eip155:56",
+        "scheme_class": ExactEvmServerScheme,
+        "pay_to_env": "BSC_MAINNET_PAY_TO",
+        "route_suffix": "bsc-mainnet",
+        "description": "BSC Mainnet protected demo image",
+        "payment_kwargs": {
+            "price": os.getenv("BSC_MAINNET_PRICE", "0.01"),
+            "asset": "0x55d398326f99059fF775485246999027B3197955",
+        },
+    },
+]
+
+# ---------------------------------------------------------------------------
+# Build from config — no manual wiring needed below this line
 # ---------------------------------------------------------------------------
 facilitator_client = HTTPFacilitatorClient(FacilitatorConfig(url=FACILITATOR_URL))
 resource_server = x402ResourceServer(facilitator_client)
 
-if TRON_PAY_TO:
-    logger.info("Registering TRON exact payment scheme...")
-    resource_server.register("tron:nile", ExactTronServerScheme())
-if BSC_PAY_TO:
-    logger.info("Registering EVM exact payment scheme...")
-    resource_server.register("eip155:97", ExactEvmServerScheme())
+active_networks = []
+all_payment_options = []
+routes = {}
 
-# Initialize server immediately
+for cfg in NETWORK_CONFIGS:
+    pay_to = os.getenv(cfg["pay_to_env"], "")
+    if not pay_to:
+        logger.warning(f"Skipping {cfg['network_id']}: {cfg['pay_to_env']} not set")
+        continue
+
+    logger.info(f"Registering scheme for {cfg['network_id']}...")
+    resource_server.register(cfg["network_id"], cfg["scheme_class"]())
+
+    option = PaymentOption(
+        scheme="exact",
+        network=cfg["network_id"],
+        pay_to=pay_to,
+        **cfg["payment_kwargs"],
+    )
+
+    suffix = cfg["route_suffix"]
+    routes[f"GET /protected-{suffix}"] = RouteConfig(
+        accepts=[option],
+        mime_type=DEMO_IMAGE_MEDIA_TYPE,
+        description=cfg["description"],
+    )
+
+    all_payment_options.append(option)
+    active_networks.append(cfg)
+    logger.debug(f"  PayTo={pay_to}, route=/protected-{suffix}")
+
+if not active_networks:
+    raise ValueError(
+        "No networks configured. Set at least one pay-to address env var: "
+        + ", ".join(c["pay_to_env"] for c in NETWORK_CONFIGS)
+    )
+
+# Multi-chain route (combines all active networks)
+if len(all_payment_options) > 1:
+    routes["GET /protected-multi"] = RouteConfig(
+        accepts=all_payment_options,
+        mime_type=DEMO_IMAGE_MEDIA_TYPE,
+        description="Multi-chain protected demo image",
+    )
+
 resource_server.initialize()
+
+logger.info(
+    f"Starting x402-demo server on port {SERVER_PORT} "
+    f"with {len(active_networks)} network(s): "
+    + ", ".join(c["network_id"] for c in active_networks)
+)
 
 # ---------------------------------------------------------------------------
 # FastAPI App
@@ -89,99 +198,61 @@ app.add_middleware(
     expose_headers=["*"],
 )
 
-# ---------------------------------------------------------------------------
-# Configure x402 Routes
-# ---------------------------------------------------------------------------
-accepts_nile = []
-if TRON_PAY_TO:
-    accepts_nile.append(
-        PaymentOption(
-            scheme="exact",
-            network="tron:nile",
-            pay_to=TRON_PAY_TO,
-            price=AssetAmount(
-                amount=TRON_PRICE,
-                asset="TXYZopYRdj2D9XRtbG411XZZ3kM5VkAeBf",
-                extra={
-                    "name": "Tether USD",
-                    "version": "1",
-                    "assetTransferMethod": "permit2"
-                }
-            )
-        )
-    )
-
-accepts_bsc = []
-if BSC_PAY_TO and BSC_TEST_ASSETS:
-    accepts_bsc.append(
-        PaymentOption(
-            scheme="exact",
-            network="eip155:97",
-            pay_to=BSC_PAY_TO,
-            price=BSC_TEST_PRICE,
-            assets=BSC_TEST_ASSETS,
-        )
-    )
-
-accepts_multi = [*accepts_nile, *accepts_bsc]
-
-routes = {
-    "GET /protected-nile": RouteConfig(
-        accepts=accepts_nile,
-        mime_type=DEMO_IMAGE_MEDIA_TYPE,
-        description="TRON Nile protected demo image",
-    ),
-}
-
-if accepts_bsc:
-    routes["GET /protected-bsc-testnet"] = RouteConfig(
-        accepts=accepts_bsc,
-        mime_type=DEMO_IMAGE_MEDIA_TYPE,
-        description="BSC testnet protected demo image",
-    )
-
-routes["GET /protected-multi"] = RouteConfig(
-    accepts=accepts_multi,
-    mime_type=DEMO_IMAGE_MEDIA_TYPE,
-    description="Multi-chain protected demo image",
-)
-
-# Attach global middleware
-logger.info("Applying x402 ASGI Middleware onto FastAPI app routes")
 app.add_middleware(PaymentMiddlewareASGI, routes=routes, server=resource_server)
 
 # ---------------------------------------------------------------------------
-# Route Handlers
+# Route Handlers (dynamically generated from config)
 # ---------------------------------------------------------------------------
 @app.get("/")
 async def index():
-    logger.debug("Received request on root / index")
     return {
         "service": "X402 Protected Server (ASGI Edition)",
         "resource": "Protected demo image",
-        "image": str(DEMO_IMAGE_PATH.name),
+        "networks": [c["network_id"] for c in active_networks],
+        "routes": list(routes.keys()),
     }
 
-@app.get("/protected-nile")
-async def protected_nile():
-    logger.info("Client successfully accessed /protected-nile after valid TRON payment!")
-    return FileResponse(DEMO_IMAGE_PATH, media_type=DEMO_IMAGE_MEDIA_TYPE, filename=DEMO_IMAGE_PATH.name)
 
-@app.get("/protected-bsc-testnet")
-async def protected_bsc_testnet():
-    logger.info("Client successfully accessed /protected-bsc-testnet after valid BSC payment!")
-    return FileResponse(DEMO_IMAGE_PATH, media_type=DEMO_IMAGE_MEDIA_TYPE, filename=DEMO_IMAGE_PATH.name)
+def _make_handler(suffix: str, network_id: str):
+    """Factory to create a route handler with proper closure."""
+    async def handler():
+        logger.info(f"Client accessed /protected-{suffix} after valid {network_id} payment!")
+        return FileResponse(
+            DEMO_IMAGE_PATH,
+            media_type=DEMO_IMAGE_MEDIA_TYPE,
+            filename=DEMO_IMAGE_PATH.name,
+        )
+    handler.__name__ = f"protected_{suffix.replace('-', '_')}"
+    return handler
 
-@app.get("/protected-multi")
-async def protected_multi():
-    logger.info("Client successfully accessed /protected-multi after valid Multi-chain payment!")
-    return FileResponse(DEMO_IMAGE_PATH, media_type=DEMO_IMAGE_MEDIA_TYPE, filename=DEMO_IMAGE_PATH.name)
+
+for cfg in active_networks:
+    suffix = cfg["route_suffix"]
+    app.get(f"/protected-{suffix}")(_make_handler(suffix, cfg["network_id"]))
+
+if len(all_payment_options) > 1:
+    @app.get("/protected-multi")
+    async def protected_multi():
+        logger.info("Client accessed /protected-multi after valid multi-chain payment!")
+        return FileResponse(
+            DEMO_IMAGE_PATH,
+            media_type=DEMO_IMAGE_MEDIA_TYPE,
+            filename=DEMO_IMAGE_PATH.name,
+        )
+
 
 def main():
     print("=" * 60)
-    print("X402 Protected Resource Server - Decorator Edition")
+    print("X402 Protected Resource Server")
+    print("=" * 60)
+    print(f"\nListening on http://0.0.0.0:{SERVER_PORT}")
+    print(f"\nActive endpoints ({len(active_networks)} network(s)):")
+    print(f"  GET /")
+    for route_key, route_cfg in routes.items():
+        print(f"  {route_key}  [{route_cfg.description}]")
     print("=" * 60)
     uvicorn.run(app, host="0.0.0.0", port=SERVER_PORT, log_level="info")
+
 
 if __name__ == "__main__":
     main()
