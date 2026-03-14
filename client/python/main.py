@@ -1,50 +1,39 @@
 """
 X402 Client Demo (x402 v2 Python SDK)
-Supports TRON Nile and BSC Testnet.
+
+Only two inputs needed:
+  PRIVATE_KEY  - hex private key (works for both TRON and EVM chains)
+  SERVER_URL   - full URL of the protected resource (e.g. http://localhost:8000/protected-nile)
+
+The client auto-detects the required network from the server's 402 response
+and dynamically registers only the needed signer.
+
+Environment variables:
+  PRIVATE_KEY   - (required) hex private key
+  SERVER_URL    - full URL of the protected resource (default: http://localhost:8000/protected-nile)
+  X402_TIMEOUT  - HTTP timeout in seconds (default: 120)
 """
 
-import os
 import json
+import os
 from pathlib import Path
 from tempfile import gettempdir
 
 from dotenv import load_dotenv
-from eth_account import Account
 
 from bankofai.x402 import x402ClientSync
-from bankofai.x402.mechanisms.evm import EthAccountSigner
-from bankofai.x402.mechanisms.evm.exact import register_exact_evm_client
-from bankofai.x402.mechanisms.tron import ClientTronSigner, register_exact_tron_client
+from bankofai.x402.http import x402HTTPClientSync
 
 # ---------------------------------------------------------------------------
 # Load .env
 # ---------------------------------------------------------------------------
-
 load_dotenv(Path(__file__).parent / ".env")
 load_dotenv(Path(__file__).parent.parent.parent / ".env")
 
+
 # ---------------------------------------------------------------------------
-# Configuration
+# Helpers
 # ---------------------------------------------------------------------------
-
-TRON_PRIVATE_KEY = os.getenv("TRON_CLIENT_PRIVATE_KEY", os.getenv("TRON_PRIVATE_KEY", ""))
-BSC_PRIVATE_KEY = os.getenv("BSC_CLIENT_PRIVATE_KEY", os.getenv("BSC_PRIVATE_KEY", ""))
-
-SERVER_URL = os.getenv("SERVER_URL", "http://localhost:8000")
-ENDPOINT = os.getenv("ENDPOINT", "/protected")
-PREFERRED_NETWORK = os.getenv("PREFERRED_NETWORK")
-
-if not PREFERRED_NETWORK:
-    if TRON_PRIVATE_KEY:
-        PREFERRED_NETWORK = "tron:nile"
-        ENDPOINT = "/protected-nile"
-    else:
-        PREFERRED_NETWORK = "eip155:97"
-        ENDPOINT = "/protected-bsc-testnet"
-
-if not TRON_PRIVATE_KEY and not BSC_PRIVATE_KEY:
-    raise ValueError("At least one of TRON_CLIENT_PRIVATE_KEY or BSC_CLIENT_PRIVATE_KEY is required")
-
 
 def save_image_response(content: bytes, content_type: str) -> str:
     if "jpeg" in content_type or "jpg" in content_type:
@@ -58,69 +47,102 @@ def save_image_response(content: bytes, content_type: str) -> str:
     output_path.write_bytes(content)
     return str(output_path)
 
+
+def detect_networks(response_headers: dict, body: bytes) -> set[str]:
+    """Extract required network(s) from the 402 response.
+
+    The x402 middleware puts payment info in the Payment-Required header
+    (base64-encoded JSON). Falls back to parsing the body if the header
+    is absent.
+    """
+    import base64
+
+    pr_header = response_headers.get("payment-required", "")
+    if pr_header:
+        data = json.loads(base64.b64decode(pr_header))
+    else:
+        data = json.loads(body)
+
+    accepts = data.get("accepts", [])
+    return {a["network"] for a in accepts if "network" in a}
+
+
+def register_signers(client: x402ClientSync, networks: set[str], private_key: str) -> None:
+    """Dynamically register only the signers needed for the detected networks."""
+    needs_tron = any(n.startswith("tron:") for n in networks)
+    needs_evm = any(n.startswith("eip155:") for n in networks)
+
+    if needs_tron:
+        from bankofai.x402.mechanisms.tron import ClientTronSigner, register_exact_tron_client
+        tron_signer = ClientTronSigner(private_key=private_key)
+        register_exact_tron_client(client, tron_signer)
+        print(f"  Registered TRON signer (address: {tron_signer.address})")
+
+    if needs_evm:
+        from eth_account import Account
+        from bankofai.x402.mechanisms.evm import EthAccountSigner
+        from bankofai.x402.mechanisms.evm.exact import register_exact_evm_client
+        pk = private_key if private_key.startswith("0x") else "0x" + private_key
+        account = Account.from_key(pk)
+        register_exact_evm_client(client, EthAccountSigner(account))
+        print(f"  Registered EVM signer  (address: {account.address})")
+
+    if not needs_tron and not needs_evm:
+        raise ValueError(f"Unsupported network(s): {networks}")
+
+
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
 def main():
+    private_key = os.getenv("PRIVATE_KEY", "")
+    server_url = os.getenv("SERVER_URL", "http://localhost:8000/protected-nile")
+    timeout = float(os.getenv("X402_TIMEOUT", "120"))
+
+    if not private_key:
+        raise ValueError("PRIVATE_KEY environment variable is required")
+
     print("=" * 60)
     print("X402 Client (Python / v2 SDK)")
     print("=" * 60)
-    
-    # Build client
-    client = x402ClientSync()
-
-    if TRON_PRIVATE_KEY:
-        tron_signer = ClientTronSigner(private_key=TRON_PRIVATE_KEY)
-        register_exact_tron_client(client, tron_signer)
-        print(f"  TRON Address: {tron_signer.address}")
-
-    if BSC_PRIVATE_KEY:
-        pk = BSC_PRIVATE_KEY if BSC_PRIVATE_KEY.startswith("0x") else "0x" + BSC_PRIVATE_KEY
-        account = Account.from_key(pk)
-        evm_signer = EthAccountSigner(account)
-        register_exact_evm_client(client, evm_signer)
-        print(f"  EVM Address:  {account.address}")
-
-    print(f"  Target:       {SERVER_URL}{ENDPOINT}")
-    print(f"  Network:      {PREFERRED_NETWORK}")
+    print(f"  Target: {server_url}")
     print("=" * 60)
 
     import httpx
-    from bankofai.x402.http import (
-        x402HTTPClientSync,
-        PaymentRoundTripper,
-    )
 
-    with httpx.Client(timeout=120.0) as http:
-        payment_client = x402HTTPClientSync(client)
+    with httpx.Client(timeout=timeout) as http:
+        # Step 1: GET the resource → expect 402
+        print(f"\nGET {server_url}...")
+        response = http.get(server_url)
 
-        url = f"{SERVER_URL}{ENDPOINT}"
-        print(f"\nGET {url}...")
-        
-        # Step 1: Initial request
-        response = http.get(url)
-        
         if response.status_code != 402:
             print(f"Status: {response.status_code}")
             print(response.text[:500])
             return
 
         print("\n402 Payment Required received")
-        
-        # Step 2: Create payment payload
-        # Handle both v2 and v1 via the helper
+
+        # Step 2: Detect network from 402 body, register only needed signer
+        networks = detect_networks(dict(response.headers), response.content)
+        print(f"  Networks offered: {', '.join(sorted(networks))}")
+
+        client = x402ClientSync()
+        register_signers(client, networks, private_key)
+
+        # Step 3: Create payment and retry
+        payment_client = x402HTTPClientSync(client)
+
         get_header = lambda h: response.headers.get(h)
         payment_required = payment_client.get_payment_required_response(get_header, response.content)
-        
+
         payment_payload = client.create_payment_payload(payment_required)
-        print(f"Payment created: scheme={payment_payload.accepted.scheme} network={payment_payload.accepted.network}")
+        print(f"\nPayment created: scheme={payment_payload.accepted.scheme} network={payment_payload.accepted.network}")
 
-        # Step 3: Retry with payment header
         payment_headers = payment_client.encode_payment_signature_header(payment_payload)
-        response = http.get(url, headers=payment_headers)
+        response = http.get(server_url, headers=payment_headers)
 
-        print(f"\nFinal Status: {response.status_code}")
+        print(f"Final Status: {response.status_code}")
         content_type = response.headers.get("content-type", "")
 
         if "image/" in content_type:
