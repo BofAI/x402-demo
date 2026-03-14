@@ -25,9 +25,8 @@ echo "Using Python: $PY_BIN" >&2
 "$PY_BIN" -m pip install --upgrade pip
 
 # Note: Local x402 SDK at ../x402/python/x402 installs as package 'x402',
-# but this demo requires 'bankofai.x402' from the Git URL.
-# Always use the Git URL to ensure correct package namespace.
-echo "Installing bankofai.x402 from Git URL (requirements.txt)..." >&2
+# but this demo requires 'bankofai.x402' from the pinned Git tag in requirements.txt.
+echo "Installing bankofai.x402 from pinned Git tag (requirements.txt)..." >&2
 "$PY_BIN" -m pip install --no-cache-dir --force-reinstall -r "$REQ_FILE"
 
 echo "Validating bankofai.x402 sync exports..." >&2

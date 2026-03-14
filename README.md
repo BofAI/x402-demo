@@ -56,7 +56,7 @@ The demo simulates a payment workflow involving three conceptual agents:
 ### Facilitator (Payment Processor)
 - Validates signed payment payloads and settles transactions on-chain.
 - Validates and settles TRON `exact` payments (`eip3009` / `permit2`) on Nile.
-- Validates and settles BSC testnet `exact` payments using EIP-3009 compatible assets.
+- Validates and settles BSC testnet `exact` payments, including `permit2` for public `USDT` / `USDC`.
 
 ### Client (Resource Requester)
 - **TypeScript CLI** — Uses `x402Client` and `ExactTronScheme` from the new SDK.
@@ -69,7 +69,7 @@ The demo simulates a payment workflow involving three conceptual agents:
 | Network | Chain ID | Payment Scheme | Transfer Methods |
 |---------|----------|----------------|------------------|
 | TRON Nile (testnet) | `tron:nile` | `exact` | `eip3009`, `permit2` |
-| BSC Testnet (optional) | `eip155:97` | `exact` | `eip3009` |
+| BSC Testnet (optional) | `eip155:97` | `exact` | `permit2` |
 
 Endpoints exposed by the TypeScript demo:
 - `/protected-nile` — TRON-only
