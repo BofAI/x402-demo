@@ -1,5 +1,6 @@
 import os
 import logging
+import sys
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -14,6 +15,12 @@ from bankofai.x402.http.middleware.fastapi import PaymentMiddlewareASGI
 from bankofai.x402.http.types import RouteConfig
 from bankofai.x402.mechanisms.evm.exact import ExactEvmServerScheme
 from bankofai.x402.mechanisms.tron import ExactTronServerScheme
+
+ROOT_DIR = Path(__file__).resolve().parent.parent
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
+
+from python_sdk_info import format_installed_x402_sdk_info
 
 # ---------------------------------------------------------------------------
 # Logging Configuration
@@ -245,6 +252,8 @@ def main():
     print("=" * 60)
     print("X402 Protected Resource Server")
     print("=" * 60)
+    for line in format_installed_x402_sdk_info():
+        print(line)
     print(f"\nListening on http://0.0.0.0:{SERVER_PORT}")
     print(f"\nActive endpoints ({len(active_networks)} network(s)):")
     print(f"  GET /")

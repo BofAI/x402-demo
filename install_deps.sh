@@ -30,8 +30,11 @@ echo "Installing bankofai.x402 from pinned Git tag (requirements.txt)..." >&2
 "$PY_BIN" -m pip install --no-cache-dir --force-reinstall -r "$REQ_FILE"
 
 echo "Validating bankofai.x402 sync exports..." >&2
-"$PY_BIN" - <<'PY'
+DEMO_ROOT="$ROOT_DIR" "$PY_BIN" - <<'PY'
 from bankofai import x402
+from pathlib import Path
+import os
+import sys
 
 required = ("x402ClientSync", "x402ResourceServerSync", "x402FacilitatorSync")
 missing = [name for name in required if not hasattr(x402, name)]
@@ -40,7 +43,13 @@ if missing:
         "Installed bankofai.x402 is missing expected sync exports: "
         + ", ".join(missing)
     )
+root = Path(os.environ["DEMO_ROOT"])
+if str(root) not in sys.path:
+    sys.path.insert(0, str(root))
+from python_sdk_info import format_installed_x402_sdk_info
 print("bankofai.x402 sync exports are available.")
+for line in format_installed_x402_sdk_info():
+    print(line)
 PY
 
 # TypeScript client dependencies

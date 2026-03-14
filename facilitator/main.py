@@ -5,6 +5,7 @@ Data-driven network registration — add new chains by appending to NETWORKS.
 """
 
 import os
+import sys
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -16,6 +17,12 @@ from bankofai.x402 import x402FacilitatorSync, PaymentPayload, PaymentRequiremen
 from bankofai.x402.mechanisms.evm import FacilitatorWeb3Signer
 from bankofai.x402.mechanisms.evm.exact import register_exact_evm_facilitator
 from bankofai.x402.mechanisms.tron import FacilitatorTronSigner, register_exact_tron_facilitator
+
+ROOT_DIR = Path(__file__).resolve().parent.parent
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
+
+from python_sdk_info import format_installed_x402_sdk_info
 
 # ---------------------------------------------------------------------------
 # Load .env
@@ -96,6 +103,8 @@ if not registered_networks:
 print("=" * 60)
 print("X402 Facilitator (Python / v2 SDK)")
 print("=" * 60)
+for line in format_installed_x402_sdk_info():
+    print(line)
 print(f"  Networks: {', '.join(registered_networks)}")
 print("=" * 60)
 

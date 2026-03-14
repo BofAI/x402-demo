@@ -16,6 +16,7 @@ is insufficient before replaying the payment request.
 import base64
 import json
 import os
+import sys
 import time
 from pathlib import Path
 from tempfile import gettempdir
@@ -24,6 +25,12 @@ from dotenv import load_dotenv
 
 from bankofai.x402 import x402ClientSync
 from bankofai.x402.http import x402HTTPClientSync
+
+ROOT_DIR = Path(__file__).resolve().parents[2]
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
+
+from python_sdk_info import format_installed_x402_sdk_info
 
 # ---------------------------------------------------------------------------
 # Load .env
@@ -320,6 +327,8 @@ def main():
     print("=" * 60)
     print("X402 Client (Python / v2 SDK)")
     print("=" * 60)
+    for line in format_installed_x402_sdk_info():
+        print(line)
     print(f"  Target:       {server_url}")
     preferred_network = os.getenv("PREFERRED_NETWORK", "")
     if preferred_network:
