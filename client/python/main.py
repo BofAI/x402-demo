@@ -67,6 +67,23 @@ def get_private_key() -> str:
     )
 
 
+def get_private_key_for_network(network: str) -> str:
+    """Get private key for specific network."""
+    if network.startswith("tron:"):
+        return (
+            os.getenv("TRON_CLIENT_PRIVATE_KEY", "")
+            or os.getenv("TRON_PRIVATE_KEY", "")
+            or get_private_key()
+        )
+    elif network.startswith("eip155:"):
+        return (
+            os.getenv("BSC_CLIENT_PRIVATE_KEY", "")
+            or os.getenv("BSC_PRIVATE_KEY", "")
+            or get_private_key()
+        )
+    return get_private_key()
+
+
 def get_evm_rpc_url(network: str) -> str:
     if network == "eip155:56":
         return os.getenv("BSC_MAINNET_RPC_URL", "https://bsc-dataseed.binance.org")
@@ -111,7 +128,7 @@ def detect_networks(response_headers: dict, body: bytes) -> set[str]:
     return {a["network"] for a in accepts if "network" in a}
 
 
-def register_signers(client: x402ClientSync, networks: set[str], private_key: str) -> dict[str, str]:
+def register_signers(client: x402ClientSync, networks: set[str]) -> dict[str, str]:
     """Register only the signers needed for the detected networks."""
     addresses: dict[str, str] = {}
     needs_tron = any(n.startswith("tron:") for n in networks)
@@ -120,7 +137,8 @@ def register_signers(client: x402ClientSync, networks: set[str], private_key: st
     if needs_tron:
         from bankofai.x402.mechanisms.tron import ClientTronSigner, register_exact_tron_client
 
-        tron_signer = ClientTronSigner(private_key=private_key)
+        tron_private_key = get_private_key_for_network("tron:nile")
+        tron_signer = ClientTronSigner(private_key=tron_private_key)
         register_exact_tron_client(client, tron_signer)
         addresses["tron"] = tron_signer.address
         print(f"  Registered TRON signer (address: {tron_signer.address})")
@@ -130,7 +148,8 @@ def register_signers(client: x402ClientSync, networks: set[str], private_key: st
         from bankofai.x402.mechanisms.evm import EthAccountSigner
         from bankofai.x402.mechanisms.evm.exact import register_exact_evm_client
 
-        pk = private_key if private_key.startswith("0x") else "0x" + private_key
+        evm_private_key = get_private_key_for_network("eip155:97")
+        pk = evm_private_key if evm_private_key.startswith("0x") else "0x" + evm_private_key
         account = Account.from_key(pk)
         register_exact_evm_client(client, EthAccountSigner(account))
         addresses["evm"] = account.address
@@ -315,14 +334,8 @@ def print_response_body(response) -> None:
 # ---------------------------------------------------------------------------
 
 def main():
-    private_key = get_private_key()
     server_url = os.getenv("SERVER_URL", "http://localhost:8000/protected-nile")
     timeout = float(os.getenv("X402_TIMEOUT", "120"))
-
-    if not private_key:
-        raise ValueError(
-            "PRIVATE_KEY is required (or fallback TRON_CLIENT_PRIVATE_KEY / BSC_CLIENT_PRIVATE_KEY)"
-        )
 
     print("=" * 60)
     print("X402 Client (Python / v2 SDK)")
@@ -351,7 +364,7 @@ def main():
         print(f"  Networks offered: {', '.join(sorted(networks))}")
 
         client = x402ClientSync()
-        register_signers(client, networks, private_key)
+        register_signers(client, networks)
         payment_client = x402HTTPClientSync(client)
 
         get_header = lambda h: response.headers.get(h)
@@ -360,9 +373,11 @@ def main():
 
         selected = select_requirement(payment_required)
         if selected.network.startswith("tron:"):
-            ensure_tron_permit2_approval(selected, private_key)
+            tron_private_key = get_private_key_for_network(selected.network)
+            ensure_tron_permit2_approval(selected, tron_private_key)
         elif selected.network.startswith("eip155:"):
-            ensure_evm_permit2_approval(selected, private_key)
+            evm_private_key = get_private_key_for_network(selected.network)
+            ensure_evm_permit2_approval(selected, evm_private_key)
 
         payment_payload = client.create_payment_payload(payment_required)
         print(

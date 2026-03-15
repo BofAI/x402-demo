@@ -15,12 +15,28 @@ from bankofai.x402.http.middleware.fastapi import PaymentMiddlewareASGI
 from bankofai.x402.http.types import RouteConfig
 from bankofai.x402.mechanisms.evm.exact import ExactEvmServerScheme
 from bankofai.x402.mechanisms.tron import ExactTronServerScheme
+from bankofai.x402.registry import AssetInfo, global_asset_registry
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
 from python_sdk_info import format_installed_x402_sdk_info
+
+# ---------------------------------------------------------------------------
+# Register custom assets
+# ---------------------------------------------------------------------------
+global_asset_registry.register(
+    "eip155:97",
+    "DHLU",
+    AssetInfo(
+        address="0x375cADdd2cB68cE82e3D9B075D551067a7b4B816",
+        decimals=6,
+        name="DA HULU",
+        version="1",
+        asset_transfer_method="permit2",
+    ),
+)
 
 # ---------------------------------------------------------------------------
 # Logging Configuration
