@@ -38,21 +38,21 @@ case "$COMPONENT" in
         echo "Starting X402 Protected Resource Server"
         echo "=========================================="
         cd server
-        python main.py
+        "$SCRIPT_DIR/.venv/bin/python" main.py
         ;;
     facilitator)
         echo "=========================================="
         echo "Starting X402 Facilitator"
         echo "=========================================="
         cd facilitator
-        python main.py
+        "$SCRIPT_DIR/.venv/bin/python" main.py
         ;;
     client)
         echo "=========================================="
         echo "Starting X402 Client (Python)"
         echo "=========================================="
         cd client/python
-        python main.py
+        "$SCRIPT_DIR/.venv/bin/python" main.py
         ;;
     client-ts)
         echo "=========================================="
