@@ -23,6 +23,7 @@ from bankofai.x402.utils.gasfree import GasFreeAPIClient
 from bankofai.x402.config import NetworkConfig
 from bankofai.x402.mechanisms.evm.exact_permit import ExactPermitEvmClientMechanism
 from bankofai.x402.mechanisms.evm.exact import ExactEvmClientMechanism
+from agent_wallet import TronWallet, EvmWallet
 from bankofai.x402.signers.client import TronClientSigner, EvmClientSigner
 from bankofai.x402.tokens import TokenRegistry
 from bankofai.x402.types import PaymentRequirements
@@ -75,8 +76,12 @@ async def main():
     print("X402 Payment Client (Multi-Network)")
     print("=" * 80)
 
+    # --- Create wallets from agent-wallet ---
+    clean_tron_key = TRON_PRIVATE_KEY[2:] if TRON_PRIVATE_KEY.startswith("0x") else TRON_PRIVATE_KEY
+    tron_wallet = TronWallet(bytes.fromhex(clean_tron_key))
+
     # --- Create signers for every chain family ---
-    tron_signer = TronClientSigner.from_private_key(TRON_PRIVATE_KEY)
+    tron_signer = await TronClientSigner.create(tron_wallet)
 
     # Initialize GasFree API clients
     gasfree_clients = {
@@ -90,7 +95,9 @@ async def main():
     x402_client.register("tron:*", ExactPermitTronClientMechanism(tron_signer))
     x402_client.register("tron:*", ExactGasFreeClientMechanism(tron_signer, clients=gasfree_clients))
     if BSC_PRIVATE_KEY:
-        evm_signer = EvmClientSigner.from_private_key(BSC_PRIVATE_KEY)
+        clean_bsc_key = BSC_PRIVATE_KEY[2:] if BSC_PRIVATE_KEY.startswith("0x") else BSC_PRIVATE_KEY
+        evm_wallet = EvmWallet(bytes.fromhex(clean_bsc_key))
+        evm_signer = await EvmClientSigner.create(evm_wallet)
         for bsc_network in [NetworkConfig.BSC_TESTNET, NetworkConfig.BSC_MAINNET]:
             x402_client.register(bsc_network, ExactPermitEvmClientMechanism(evm_signer))
             x402_client.register(bsc_network, ExactEvmClientMechanism(evm_signer))

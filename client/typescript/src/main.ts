@@ -30,6 +30,7 @@ import {
   getGasFreeApiBaseUrl,
   findByAddress,
 } from '@bankofai/x402';
+import { TronWallet, EvmWallet } from '@bankofai/agent-wallet';
 
 // ---------------------------------------------------------------------------
 // Configuration
@@ -86,15 +87,22 @@ async function saveImage(response: Response): Promise<string> {
 // ---------------------------------------------------------------------------
 
 async function main(): Promise<void> {
+  // --- Create wallets from agent-wallet ---
+  const cleanTronKey = TRON_PRIVATE_KEY.startsWith('0x') ? TRON_PRIVATE_KEY.slice(2) : TRON_PRIVATE_KEY;
+  const tronWallet = new TronWallet(Buffer.from(cleanTronKey, 'hex'));
+
   // --- Create signers for every chain family ---
-  const tronSigner = new TronClientSigner(TRON_PRIVATE_KEY);
+  const tronSigner = await TronClientSigner.create(tronWallet);
 
   hr();
   console.log('X402 Client (TypeScript · Multi-Network)');
   hr();
   console.log(`  TRON Address : ${tronSigner.getAddress()}`);
   if (BSC_PRIVATE_KEY) {
-    console.log(`  EVM  Address : ${new EvmClientSigner(BSC_PRIVATE_KEY).getAddress()}`);
+    const cleanBscKey = BSC_PRIVATE_KEY.startsWith('0x') ? BSC_PRIVATE_KEY.slice(2) : BSC_PRIVATE_KEY;
+    const evmWalletPreview = new EvmWallet(Buffer.from(cleanBscKey, 'hex'));
+    const evmSignerPreview = await EvmClientSigner.create(evmWalletPreview);
+    console.log(`  EVM  Address : ${evmSignerPreview.getAddress()}`);
   } else {
     console.log('  EVM: not configured (BSC_PRIVATE_KEY not set)');
   }
@@ -114,7 +122,9 @@ async function main(): Promise<void> {
   x402.register('tron:*', new ExactGasFreeClientMechanism(tronSigner, gasfreeClients));
 
   if (BSC_PRIVATE_KEY) {
-    const evmSigner = new EvmClientSigner(BSC_PRIVATE_KEY);
+    const cleanBscKey = BSC_PRIVATE_KEY.startsWith('0x') ? BSC_PRIVATE_KEY.slice(2) : BSC_PRIVATE_KEY;
+    const evmWallet = new EvmWallet(Buffer.from(cleanBscKey, 'hex'));
+    const evmSigner = await EvmClientSigner.create(evmWallet);
     x402.register('eip155:97', new ExactPermitEvmClientMechanism(evmSigner));
     x402.register('eip155:97', new ExactEvmClientMechanism(evmSigner));
     x402.register('eip155:56', new ExactPermitEvmClientMechanism(evmSigner));
