@@ -23,7 +23,7 @@ from bankofai.x402.utils.gasfree import GasFreeAPIClient
 from bankofai.x402.config import NetworkConfig
 from bankofai.x402.mechanisms.evm.exact_permit import ExactPermitEvmClientMechanism
 from bankofai.x402.mechanisms.evm.exact import ExactEvmClientMechanism
-from agent_wallet import TronWallet, EvmWallet
+from agent_wallet import resolve_wallet_provider
 from bankofai.x402.signers.client import TronClientSigner, EvmClientSigner
 from bankofai.x402.tokens import TokenRegistry
 from bankofai.x402.types import PaymentRequirements
@@ -76,9 +76,12 @@ async def main():
     print("X402 Payment Client (Multi-Network)")
     print("=" * 80)
 
-    # --- Create wallets from agent-wallet ---
-    clean_tron_key = TRON_PRIVATE_KEY[2:] if TRON_PRIVATE_KEY.startswith("0x") else TRON_PRIVATE_KEY
-    tron_wallet = TronWallet(bytes.fromhex(clean_tron_key))
+    # --- Set up agent-wallet environment variables ---
+    os.environ["AGENT_WALLET_PRIVATE_KEY"] = TRON_PRIVATE_KEY
+    
+    # --- Create wallets from agent-wallet using resolve_wallet_provider ---
+    tron_provider = resolve_wallet_provider(network="tron")
+    tron_wallet = await tron_provider.get_active_wallet()
 
     # --- Create signers for every chain family ---
     tron_signer = await TronClientSigner.create(tron_wallet)
@@ -95,8 +98,9 @@ async def main():
     x402_client.register("tron:*", ExactPermitTronClientMechanism(tron_signer))
     x402_client.register("tron:*", ExactGasFreeClientMechanism(tron_signer, clients=gasfree_clients))
     if BSC_PRIVATE_KEY:
-        clean_bsc_key = BSC_PRIVATE_KEY[2:] if BSC_PRIVATE_KEY.startswith("0x") else BSC_PRIVATE_KEY
-        evm_wallet = EvmWallet(bytes.fromhex(clean_bsc_key))
+        os.environ["AGENT_WALLET_PRIVATE_KEY"] = BSC_PRIVATE_KEY
+        evm_provider = resolve_wallet_provider(network="eip155")
+        evm_wallet = await evm_provider.get_active_wallet()
         evm_signer = await EvmClientSigner.create(evm_wallet)
         for bsc_network in [NetworkConfig.BSC_TESTNET, NetworkConfig.BSC_MAINNET]:
             x402_client.register(bsc_network, ExactPermitEvmClientMechanism(evm_signer))

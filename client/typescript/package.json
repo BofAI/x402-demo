@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "@bankofai/agent-wallet": "^2.2.0",
-    "@bankofai/x402": "0.5.0",
+    "@bankofai/x402": "file:/Users/wdk/tron/x402-tron/typescript/packages/x402",
     "dotenv": "^16.3.1",
     "tronweb": "^6.0.0",
     "viem": "^2.45.2"
