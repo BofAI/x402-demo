@@ -30,7 +30,6 @@ import {
   getGasFreeApiBaseUrl,
   findByAddress,
 } from '@bankofai/x402';
-import { resolveWalletProvider, type Eip712Capable } from '@bankofai/agent-wallet';
 
 // ---------------------------------------------------------------------------
 // Configuration
@@ -87,35 +86,15 @@ async function saveImage(response: Response): Promise<string> {
 // ---------------------------------------------------------------------------
 
 async function main(): Promise<void> {
-  // --- Set up agent-wallet environment variables ---
-  process.env.AGENT_WALLET_PRIVATE_KEY = TRON_PRIVATE_KEY;
-
-  // --- Create wallets from agent-wallet using resolveWalletProvider ---
-  const tronProvider = resolveWalletProvider({ network: 'tron' });
-  const tronWallet = (await tronProvider.getActiveWallet()) as unknown as Eip712Capable & {
-    getAddress(): Promise<string>;
-    signMessage(msg: Uint8Array): Promise<string>;
-    signTypedData(data: Record<string, unknown>): Promise<string>;
-    signTransaction(payload: Record<string, unknown>): Promise<string>;
-  };
-
   // --- Create signers for every chain family ---
-  const tronSigner = await TronClientSigner.create(tronWallet);
+  const tronSigner = await TronClientSigner.create();
 
   hr();
   console.log('X402 Client (TypeScript · Multi-Network)');
   hr();
   console.log(`  TRON Address : ${tronSigner.getAddress()}`);
   if (BSC_PRIVATE_KEY) {
-    process.env.AGENT_WALLET_PRIVATE_KEY = BSC_PRIVATE_KEY;
-    const evmProvider = resolveWalletProvider({ network: 'eip155' });
-    const evmWalletPreview = (await evmProvider.getActiveWallet()) as unknown as Eip712Capable & {
-      getAddress(): Promise<string>;
-      signMessage(msg: Uint8Array): Promise<string>;
-      signTypedData(data: Record<string, unknown>): Promise<string>;
-      signTransaction(payload: Record<string, unknown>): Promise<string>;
-    };
-    const evmSignerPreview = await EvmClientSigner.create(evmWalletPreview);
+    const evmSignerPreview = await EvmClientSigner.create();
     console.log(`  EVM  Address : ${evmSignerPreview.getAddress()}`);
   } else {
     console.log('  EVM: not configured (BSC_PRIVATE_KEY not set)');
@@ -137,14 +116,7 @@ async function main(): Promise<void> {
 
   if (BSC_PRIVATE_KEY) {
     process.env.AGENT_WALLET_PRIVATE_KEY = BSC_PRIVATE_KEY;
-    const evmProvider = resolveWalletProvider({ network: 'eip155' });
-    const evmWallet = (await evmProvider.getActiveWallet()) as unknown as Eip712Capable & {
-      getAddress(): Promise<string>;
-      signMessage(msg: Uint8Array): Promise<string>;
-      signTypedData(data: Record<string, unknown>): Promise<string>;
-      signTransaction(payload: Record<string, unknown>): Promise<string>;
-    };
-    const evmSigner = await EvmClientSigner.create(evmWallet);
+    const evmSigner = await EvmClientSigner.create();
     x402.register('eip155:97', new ExactPermitEvmClientMechanism(evmSigner));
     x402.register('eip155:97', new ExactEvmClientMechanism(evmSigner));
     x402.register('eip155:56', new ExactPermitEvmClientMechanism(evmSigner));

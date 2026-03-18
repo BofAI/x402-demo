@@ -23,7 +23,6 @@ from bankofai.x402.utils.gasfree import GasFreeAPIClient
 from bankofai.x402.mechanisms.tron.exact_permit import ExactPermitTronFacilitatorMechanism
 from bankofai.x402.mechanisms.evm.exact_permit import ExactPermitEvmFacilitatorMechanism
 from bankofai.x402.mechanisms.evm.exact import ExactEvmFacilitatorMechanism
-from agent_wallet import resolve_wallet_provider
 from bankofai.x402.signers.facilitator import TronFacilitatorSigner, EvmFacilitatorSigner
 from bankofai.x402.config import NetworkConfig
 from bankofai.x402.tokens import TokenRegistry
@@ -125,10 +124,7 @@ all_networks = [f"tron:{n}" for n in TRON_NETWORKS] + [NetworkConfig.BSC_MAINNET
 @app.on_event("startup")
 async def register_mechanisms():
     """Register all mechanisms with async wallet initialization."""
-    os.environ["AGENT_WALLET_PRIVATE_KEY"] = TRON_PRIVATE_KEY
-    tron_provider = resolve_wallet_provider(network="tron")
-    tron_wallet = await tron_provider.get_active_wallet()
-    tron_signer = await TronFacilitatorSigner.create(tron_wallet)
+    tron_signer = await TronFacilitatorSigner.from_private_key(TRON_PRIVATE_KEY)
 
     # Register TRON mechanisms
     for network in TRON_NETWORKS:
@@ -149,11 +145,7 @@ async def register_mechanisms():
 
     # Register BSC mechanisms (optional - requires BSC_PRIVATE_KEY)
     if BSC_PRIVATE_KEY:
-        os.environ["AGENT_WALLET_PRIVATE_KEY"] = BSC_PRIVATE_KEY
-        evm_provider = resolve_wallet_provider(network="eip155")
-        evm_wallet = await evm_provider.get_active_wallet()
-
-        bsc_signer = await EvmFacilitatorSigner.create(evm_wallet)
+        bsc_signer = await EvmFacilitatorSigner.from_private_key(BSC_PRIVATE_KEY)
         bsc_facilitator_address = bsc_signer.get_address()
 
         bsc_exact_mechanism = ExactPermitEvmFacilitatorMechanism(
