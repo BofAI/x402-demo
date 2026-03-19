@@ -2,10 +2,7 @@
 # Install with: pip install -r requirements.txt
 
 # Core bankofai-x402 SDK with TRON and FastAPI support (GitHub tag)
-bankofai-x402[tron,fastapi] @ file:///Users/wdk/tron/x402-tron/python/x402
-
-# Agent wallet (multi-chain signing)
-agent-wallet[tron,evm] @ file:///Users/wdk/tron/agent-wallet/packages/python
+bankofai-x402[tron,fastapi] @ git+https://github.com/BofAI/x402.git@dev/agent_wallet_0316#subdirectory=python/x402
 
 # Web framework
 fastapi>=0.104.0
