@@ -57,10 +57,6 @@ setup_logging()
 load_dotenv(Path(__file__).parent / ".env")
 load_dotenv(Path(__file__).parent.parent / ".env")
 
-# Configuration
-TRON_PRIVATE_KEY = os.getenv("TRON_PRIVATE_KEY", "")
-BSC_PRIVATE_KEY = os.getenv("BSC_PRIVATE_KEY", "")
-
 # Facilitator configuration
 FACILITATOR_HOST = "0.0.0.0"
 FACILITATOR_PORT = 8001
@@ -79,9 +75,6 @@ BSC_BASE_FEE = {
 BSC_MAINNET_BASE_FEE = {
     "EPS": 100_000_000_000_000,       # 0.0001 EPS (18 decimals on BSC mainnet)
 }
-
-if not TRON_PRIVATE_KEY:
-    raise ValueError("TRON_PRIVATE_KEY environment variable is required")
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -124,7 +117,7 @@ all_networks = [f"tron:{n}" for n in TRON_NETWORKS] + [NetworkConfig.BSC_MAINNET
 @app.on_event("startup")
 async def register_mechanisms():
     """Register all mechanisms with async wallet initialization."""
-    tron_signer = await TronFacilitatorSigner.from_private_key(TRON_PRIVATE_KEY)
+    tron_signer = await TronFacilitatorSigner.create()
 
     # Register TRON mechanisms
     for network in TRON_NETWORKS:
@@ -143,35 +136,31 @@ async def register_mechanisms():
             )
             facilitator.register([f"tron:{network}"], gasfree_mechanism)
 
-    # Register BSC mechanisms (optional - requires BSC_PRIVATE_KEY)
-    if BSC_PRIVATE_KEY:
-        bsc_signer = await EvmFacilitatorSigner.from_private_key(BSC_PRIVATE_KEY)
-        bsc_facilitator_address = bsc_signer.get_address()
+    bsc_signer = await EvmFacilitatorSigner.create()
+    bsc_facilitator_address = bsc_signer.get_address()
 
-        bsc_exact_mechanism = ExactPermitEvmFacilitatorMechanism(
-            bsc_signer,
-            fee_to=bsc_facilitator_address,
-            base_fee=BSC_BASE_FEE,
-        )
-        facilitator.register([NetworkConfig.BSC_TESTNET], bsc_exact_mechanism)
+    bsc_exact_mechanism = ExactPermitEvmFacilitatorMechanism(
+        bsc_signer,
+        fee_to=bsc_facilitator_address,
+        base_fee=BSC_BASE_FEE,
+    )
+    facilitator.register([NetworkConfig.BSC_TESTNET], bsc_exact_mechanism)
 
-        bsc_native_mechanism = ExactEvmFacilitatorMechanism(bsc_signer)
-        facilitator.register([NetworkConfig.BSC_TESTNET], bsc_native_mechanism)
+    bsc_native_mechanism = ExactEvmFacilitatorMechanism(bsc_signer)
+    facilitator.register([NetworkConfig.BSC_TESTNET], bsc_native_mechanism)
 
-        bsc_mainnet_exact_mechanism = ExactPermitEvmFacilitatorMechanism(
-            bsc_signer,
-            fee_to=bsc_facilitator_address,
-            base_fee=BSC_MAINNET_BASE_FEE,
-        )
-        facilitator.register([NetworkConfig.BSC_MAINNET], bsc_mainnet_exact_mechanism)
+    bsc_mainnet_exact_mechanism = ExactPermitEvmFacilitatorMechanism(
+        bsc_signer,
+        fee_to=bsc_facilitator_address,
+        base_fee=BSC_MAINNET_BASE_FEE,
+    )
+    facilitator.register([NetworkConfig.BSC_MAINNET], bsc_mainnet_exact_mechanism)
 
-        bsc_mainnet_native_mechanism = ExactEvmFacilitatorMechanism(bsc_signer)
-        facilitator.register([NetworkConfig.BSC_MAINNET], bsc_mainnet_native_mechanism)
+    bsc_mainnet_native_mechanism = ExactEvmFacilitatorMechanism(bsc_signer)
+    facilitator.register([NetworkConfig.BSC_MAINNET], bsc_mainnet_native_mechanism)
 
-        print(f"BSC  Facilitator Address: {bsc_facilitator_address}")
-        print(f"BSC  Base Fee: {BSC_BASE_FEE}")
-    else:
-        print("BSC: not configured (BSC_PRIVATE_KEY not set)")
+    print(f"BSC  Facilitator Address: {bsc_facilitator_address}")
+    print(f"BSC  Base Fee: {BSC_BASE_FEE}")
 
     print("=" * 80)
     print("X402 Payment Facilitator - Configuration")

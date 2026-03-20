@@ -38,23 +38,15 @@ import {
 const __dirname = dirname(fileURLToPath(import.meta.url));
 config({ path: resolve(__dirname, '../../../.env') });
 
-const TRON_PRIVATE_KEY = process.env.TRON_PRIVATE_KEY ?? '';
-const BSC_PRIVATE_KEY  = process.env.BSC_PRIVATE_KEY ?? '';
 const SERVER_URL       = process.env.SERVER_URL ?? 'http://localhost:8000';
 // For TRON mainnet, set TRON_GRID_API_KEY in .env — the signer reads it from env automatically.
 
 // Change ENDPOINT to target a different server resource.
 // The server may return accepts[] spanning multiple networks.
-const ENDPOINT         = '/protected-nile';
+// const ENDPOINT         = '/protected-nile';
 // const ENDPOINT         = '/protected-mainnet';
 // const ENDPOINT         = '/protected-bsc-mainnet';
-// const ENDPOINT         = '/protected-bsc-testnet';
-
-
-if (!TRON_PRIVATE_KEY) {
-  console.error('Error: TRON_PRIVATE_KEY not set in .env');
-  process.exit(1);
-}
+const ENDPOINT         = '/protected-bsc-testnet';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -93,12 +85,6 @@ async function main(): Promise<void> {
   console.log('X402 Client (TypeScript · Multi-Network)');
   hr();
   console.log(`  TRON Address : ${tronSigner.getAddress()}`);
-  if (BSC_PRIVATE_KEY) {
-    const evmSignerPreview = await EvmClientSigner.create();
-    console.log(`  EVM  Address : ${evmSignerPreview.getAddress()}`);
-  } else {
-    console.log('  EVM: not configured (BSC_PRIVATE_KEY not set)');
-  }
   console.log(`  Resource     : ${SERVER_URL}${ENDPOINT}`);
   hr();
 
@@ -114,14 +100,11 @@ async function main(): Promise<void> {
   x402.register('tron:*', new ExactPermitTronClientMechanism(tronSigner));
   x402.register('tron:*', new ExactGasFreeClientMechanism(tronSigner, gasfreeClients));
 
-  if (BSC_PRIVATE_KEY) {
-    process.env.AGENT_WALLET_PRIVATE_KEY = BSC_PRIVATE_KEY;
-    const evmSigner = await EvmClientSigner.create();
-    x402.register('eip155:97', new ExactPermitEvmClientMechanism(evmSigner));
-    x402.register('eip155:97', new ExactEvmClientMechanism(evmSigner));
-    x402.register('eip155:56', new ExactPermitEvmClientMechanism(evmSigner));
-    x402.register('eip155:56', new ExactEvmClientMechanism(evmSigner));
-  }
+  const evmSigner = await EvmClientSigner.create();
+  x402.register('eip155:97', new ExactPermitEvmClientMechanism(evmSigner));
+  x402.register('eip155:97', new ExactEvmClientMechanism(evmSigner));
+  x402.register('eip155:56', new ExactPermitEvmClientMechanism(evmSigner));
+  x402.register('eip155:56', new ExactEvmClientMechanism(evmSigner));
 
   // Balance policy: auto-resolves signers from registered mechanisms
   x402.registerPolicy(SufficientBalancePolicy);
