@@ -43,10 +43,10 @@ const SERVER_URL       = process.env.SERVER_URL ?? 'http://localhost:8000';
 
 // Change ENDPOINT to target a different server resource.
 // The server may return accepts[] spanning multiple networks.
-// const ENDPOINT         = '/protected-nile';
+const ENDPOINT         = '/protected-nile';
 // const ENDPOINT         = '/protected-mainnet';
 // const ENDPOINT         = '/protected-bsc-mainnet';
-const ENDPOINT         = '/protected-bsc-testnet';
+// const ENDPOINT         = '/protected-bsc-testnet';
 
 // ---------------------------------------------------------------------------
 // Helpers
