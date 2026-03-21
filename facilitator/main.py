@@ -6,6 +6,7 @@ Starts a FastAPI server for facilitator operations with full payment flow suppor
 import asyncio
 import os
 import sys
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
@@ -57,10 +58,6 @@ setup_logging()
 load_dotenv(Path(__file__).parent / ".env")
 load_dotenv(Path(__file__).parent.parent / ".env")
 
-# Configuration
-TRON_PRIVATE_KEY = os.getenv("TRON_PRIVATE_KEY", "")
-BSC_PRIVATE_KEY = os.getenv("BSC_PRIVATE_KEY", "")
-
 # Facilitator configuration
 FACILITATOR_HOST = "0.0.0.0"
 FACILITATOR_PORT = 8001
@@ -80,54 +77,51 @@ BSC_MAINNET_BASE_FEE = {
     "EPS": 100_000_000_000_000,       # 0.0001 EPS (18 decimals on BSC mainnet)
 }
 
-if not TRON_PRIVATE_KEY:
-    raise ValueError("TRON_PRIVATE_KEY environment variable is required")
-
-# Initialize FastAPI app
-app = FastAPI(
-    title="X402 Facilitator",
-    description="Facilitator service for X402 payment protocol",
-    version="1.0.0",
-)
-
-# Add CORS middleware
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
 # Initialize X402Facilitator
 facilitator = X402Facilitator()
 
-# Initialize GasFree API clients
-gasfree_clients = {
-    "tron:nile": GasFreeAPIClient(NetworkConfig.get_gasfree_api_base_url("tron:nile")),
-}
+gasfree_api_key_nile = os.getenv("GASFREE_API_KEY_NILE") or os.getenv("GASFREE_API_KEY")
+gasfree_api_secret_nile = os.getenv("GASFREE_API_SECRET_NILE") or os.getenv("GASFREE_API_SECRET")
+gasfree_enabled_nile = bool(gasfree_api_key_nile and gasfree_api_secret_nile)
 
-# Register TRON mechanisms
-for network in TRON_NETWORKS:
-    signer = TronFacilitatorSigner.from_private_key(TRON_PRIVATE_KEY)
-    mechanism = ExactPermitTronFacilitatorMechanism(
-        signer,
-        base_fee=TRON_BASE_FEE,
-    )
-    facilitator.register([f"tron:{network}"], mechanism)
+gasfree_clients = (
+    {
+        "tron:nile": GasFreeAPIClient(
+            NetworkConfig.get_gasfree_api_base_url("tron:nile"),
+            api_key=gasfree_api_key_nile,
+            api_secret=gasfree_api_secret_nile,
+        ),
+    }
+    if gasfree_enabled_nile
+    else {}
+)
 
-    # Add GasFree support for nile
-    if network == "nile":
-        gasfree_mechanism = ExactGasFreeFacilitatorMechanism(
-            signer,
-            clients=gasfree_clients,
+all_networks = [f"tron:{n}" for n in TRON_NETWORKS] + [NetworkConfig.BSC_MAINNET, NetworkConfig.BSC_TESTNET]
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Register all mechanisms with async wallet initialization."""
+    tron_signer = await TronFacilitatorSigner.create()
+
+    # Register TRON mechanisms
+    for network in TRON_NETWORKS:
+        mechanism = ExactPermitTronFacilitatorMechanism(
+            tron_signer,
             base_fee=TRON_BASE_FEE,
         )
-        facilitator.register([f"tron:{network}"], gasfree_mechanism)
+        facilitator.register([f"tron:{network}"], mechanism)
 
-# Register BSC mechanisms (optional - requires BSC_PRIVATE_KEY)
-if BSC_PRIVATE_KEY:
-    bsc_signer = EvmFacilitatorSigner.from_private_key(BSC_PRIVATE_KEY)
+        # Add GasFree support for nile
+        if network == "nile" and gasfree_enabled_nile:
+            gasfree_mechanism = ExactGasFreeFacilitatorMechanism(
+                tron_signer,
+                clients=gasfree_clients,
+                base_fee=TRON_BASE_FEE,
+            )
+            facilitator.register([f"tron:{network}"], gasfree_mechanism)
+
+    bsc_signer = await EvmFacilitatorSigner.create()
     bsc_facilitator_address = bsc_signer.get_address()
 
     bsc_exact_mechanism = ExactPermitEvmFacilitatorMechanism(
@@ -140,41 +134,55 @@ if BSC_PRIVATE_KEY:
     bsc_native_mechanism = ExactEvmFacilitatorMechanism(bsc_signer)
     facilitator.register([NetworkConfig.BSC_TESTNET], bsc_native_mechanism)
 
-    bsc_mainnet_signer = EvmFacilitatorSigner.from_private_key(BSC_PRIVATE_KEY)
-    bsc_mainnet_facilitator_address = bsc_mainnet_signer.get_address()
-
     bsc_mainnet_exact_mechanism = ExactPermitEvmFacilitatorMechanism(
-        bsc_mainnet_signer,
-        fee_to=bsc_mainnet_facilitator_address,
+        bsc_signer,
+        fee_to=bsc_facilitator_address,
         base_fee=BSC_MAINNET_BASE_FEE,
     )
     facilitator.register([NetworkConfig.BSC_MAINNET], bsc_mainnet_exact_mechanism)
 
-    bsc_mainnet_native_mechanism = ExactEvmFacilitatorMechanism(bsc_mainnet_signer)
+    bsc_mainnet_native_mechanism = ExactEvmFacilitatorMechanism(bsc_signer)
     facilitator.register([NetworkConfig.BSC_MAINNET], bsc_mainnet_native_mechanism)
 
-print("=" * 80)
-print("X402 Payment Facilitator - Configuration")
-print("=" * 80)
-if BSC_PRIVATE_KEY:
     print(f"BSC  Facilitator Address: {bsc_facilitator_address}")
     print(f"BSC  Base Fee: {BSC_BASE_FEE}")
-else:
-    print("BSC: not configured (BSC_PRIVATE_KEY not set)")
-print(f"TRON Base Fee: {TRON_BASE_FEE}")
 
-all_networks = [f"tron:{n}" for n in TRON_NETWORKS] + [NetworkConfig.BSC_MAINNET, NetworkConfig.BSC_TESTNET]
-print(f"Supported Networks: {', '.join(all_networks)}")
+    print("=" * 80)
+    print("X402 Payment Facilitator - Configuration")
+    print("=" * 80)
+    print(f"TRON Base Fee: {TRON_BASE_FEE}")
+    print(f"GasFree Nile Enabled: {gasfree_enabled_nile}")
+    print(f"Supported Networks: {', '.join(all_networks)}")
 
-print(f"\nNetwork Details:")
-for network_key in all_networks:
-    print(f"  {network_key}:")
-    print(f"    PaymentPermit: {NetworkConfig.get_payment_permit_address(network_key)}")
-    tokens = TokenRegistry.get_network_tokens(network_key)
-    if tokens:
-        for symbol, info in tokens.items():
-            print(f"    {symbol}: {info.address} (decimals={info.decimals})")
-print("=" * 80)
+    print(f"\nNetwork Details:")
+    for network_key in all_networks:
+        print(f"  {network_key}:")
+        print(f"    PaymentPermit: {NetworkConfig.get_payment_permit_address(network_key)}")
+        tokens = TokenRegistry.get_network_tokens(network_key)
+        if tokens:
+            for symbol, info in tokens.items():
+                print(f"    {symbol}: {info.address} (decimals={info.decimals})")
+    print("=" * 80)
+    yield
+
+
+# Initialize FastAPI app
+app = FastAPI(
+    title="X402 Facilitator",
+    description="Facilitator service for X402 payment protocol",
+    version="1.0.0",
+    lifespan=lifespan,
+)
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 
 @app.get("/supported")
 def supported():

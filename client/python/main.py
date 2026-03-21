@@ -49,10 +49,6 @@ logging.basicConfig(
 # Load environment variables
 load_dotenv()
 
-# Configuration
-TRON_PRIVATE_KEY = os.getenv("TRON_PRIVATE_KEY", "")
-BSC_PRIVATE_KEY = os.getenv("BSC_PRIVATE_KEY", "")
-
 # Server configuration
 # Change ENDPOINT_PATH to target a different server resource.
 # The server may return accepts[] spanning multiple networks.
@@ -64,48 +60,52 @@ ENDPOINT_PATH = "/protected-nile"
 RESOURCE_URL = RESOURCE_SERVER_URL + ENDPOINT_PATH
 HTTP_TIMEOUT_SECONDS = float(os.getenv("HTTP_TIMEOUT_SECONDS", "60"))
 
-
-if not TRON_PRIVATE_KEY:
-    print("\n❌ Error: TRON_PRIVATE_KEY not set in .env file")
-    print("\nPlease add your TRON private key to .env file\n")
-    exit(1)
-
 async def main():
     print("=" * 80)
     print("X402 Payment Client (Multi-Network)")
     print("=" * 80)
 
     # --- Create signers for every chain family ---
-    tron_signer = TronClientSigner.from_private_key(TRON_PRIVATE_KEY)
+    tron_signer = await TronClientSigner.create()
 
-    # Initialize GasFree API clients
+    # Initialize GasFree API clients (credentials optional; falls back to unauthenticated)
+    _gf_key_nile = os.getenv("GASFREE_API_KEY_NILE") or os.getenv("GASFREE_API_KEY")
+    _gf_secret_nile = os.getenv("GASFREE_API_SECRET_NILE") or os.getenv("GASFREE_API_SECRET")
+    _gf_key_shasta = os.getenv("GASFREE_API_KEY_SHASTA") or os.getenv("GASFREE_API_KEY")
+    _gf_secret_shasta = os.getenv("GASFREE_API_SECRET_SHASTA") or os.getenv("GASFREE_API_SECRET")
+    _gf_key_mainnet = os.getenv("GASFREE_API_KEY_MAINNET") or os.getenv("GASFREE_API_KEY")
+    _gf_secret_mainnet = os.getenv("GASFREE_API_SECRET_MAINNET") or os.getenv("GASFREE_API_SECRET")
     gasfree_clients = {
-        "tron:nile": GasFreeAPIClient(NetworkConfig.get_gasfree_api_base_url("tron:nile")),
-        "tron:shasta": GasFreeAPIClient(NetworkConfig.get_gasfree_api_base_url("tron:shasta")),
-        "tron:mainnet": GasFreeAPIClient(NetworkConfig.get_gasfree_api_base_url("tron:mainnet")),
+        "tron:nile": GasFreeAPIClient(
+            NetworkConfig.get_gasfree_api_base_url("tron:nile"),
+            api_key=_gf_key_nile,
+            api_secret=_gf_secret_nile,
+        ),
+        "tron:shasta": GasFreeAPIClient(
+            NetworkConfig.get_gasfree_api_base_url("tron:shasta"),
+            api_key=_gf_key_shasta,
+            api_secret=_gf_secret_shasta,
+        ),
+        "tron:mainnet": GasFreeAPIClient(
+            NetworkConfig.get_gasfree_api_base_url("tron:mainnet"),
+            api_key=_gf_key_mainnet,
+            api_secret=_gf_secret_mainnet,
+        ),
     }
 
     # --- Register mechanisms for ALL networks ---
     x402_client = X402Client()
     x402_client.register("tron:*", ExactPermitTronClientMechanism(tron_signer))
     x402_client.register("tron:*", ExactGasFreeClientMechanism(tron_signer, clients=gasfree_clients))
-    if BSC_PRIVATE_KEY:
-        evm_signer = EvmClientSigner.from_private_key(BSC_PRIVATE_KEY)
-        for bsc_network in [NetworkConfig.BSC_TESTNET, NetworkConfig.BSC_MAINNET]:
-            x402_client.register(bsc_network, ExactPermitEvmClientMechanism(evm_signer))
-            x402_client.register(bsc_network, ExactEvmClientMechanism(evm_signer))
+    evm_signer = await EvmClientSigner.create()
+    for bsc_network in [NetworkConfig.BSC_TESTNET, NetworkConfig.BSC_MAINNET]:
+        x402_client.register(bsc_network, ExactPermitEvmClientMechanism(evm_signer))
+        x402_client.register(bsc_network, ExactEvmClientMechanism(evm_signer))
 
     # Balance policy: auto-resolves signers from registered mechanisms
     x402_client.register_policy(SufficientBalancePolicy)
     # Register custom selection policy (AFTER balance check)
     x402_client.register_policy(PreferGasFreeUSDTPolicy)
-
-    print(f"TRON Address: {tron_signer.get_address()}")
-    if BSC_PRIVATE_KEY:
-        print(f"EVM  Address: {evm_signer.get_address()}")
-    else:
-        print("EVM: not configured (BSC_PRIVATE_KEY not set)")
-    print(f"Resource URL: {RESOURCE_URL}")
 
     print(f"\nSupported Networks and Tokens:")
     for network_name in ["tron:mainnet", "tron:nile", "tron:shasta", "eip155:97"]:
