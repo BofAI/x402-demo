@@ -6,6 +6,7 @@ Starts a FastAPI server for facilitator operations with full payment flow suppor
 import asyncio
 import os
 import sys
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
@@ -76,22 +77,6 @@ BSC_MAINNET_BASE_FEE = {
     "EPS": 100_000_000_000_000,       # 0.0001 EPS (18 decimals on BSC mainnet)
 }
 
-# Initialize FastAPI app
-app = FastAPI(
-    title="X402 Facilitator",
-    description="Facilitator service for X402 payment protocol",
-    version="1.0.0",
-)
-
-# Add CORS middleware
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
 # Initialize X402Facilitator
 facilitator = X402Facilitator()
 
@@ -114,8 +99,8 @@ gasfree_clients = (
 all_networks = [f"tron:{n}" for n in TRON_NETWORKS] + [NetworkConfig.BSC_MAINNET, NetworkConfig.BSC_TESTNET]
 
 
-@app.on_event("startup")
-async def register_mechanisms():
+@asynccontextmanager
+async def lifespan(app: FastAPI):
     """Register all mechanisms with async wallet initialization."""
     tron_signer = await TronFacilitatorSigner.create()
 
@@ -178,6 +163,26 @@ async def register_mechanisms():
             for symbol, info in tokens.items():
                 print(f"    {symbol}: {info.address} (decimals={info.decimals})")
     print("=" * 80)
+    yield
+
+
+# Initialize FastAPI app
+app = FastAPI(
+    title="X402 Facilitator",
+    description="Facilitator service for X402 payment protocol",
+    version="1.0.0",
+    lifespan=lifespan,
+)
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 
 @app.get("/supported")
 def supported():

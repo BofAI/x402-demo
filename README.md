@@ -69,6 +69,18 @@ GasFree eliminates transaction fees for TRON payments. When enabled, the client 
 - **Node.js 18+** (for TypeScript client)
 - **Docker** (optional, for containerized deployment)
 
+### Agent Wallet Setup
+
+The Python and TypeScript clients use `TronClientSigner.create()` / `EvmClientSigner.create()` (and the facilitator uses `TronFacilitatorSigner.create()` / `EvmFacilitatorSigner.create()`) instead of reading raw private keys directly. These signers are provided by the `@bankofai/agent-wallet` package and load credentials via the **agent-wallet** key store.
+
+**First-time setup:**
+```bash
+npx agent-wallet init
+```
+This interactive CLI stores your TRON and EVM private keys in a local encrypted keystore so that `*.create()` calls can resolve them at runtime. Re-run `npx agent-wallet init` whenever you rotate keys.
+
+> **Upgrading from an older version?** If you previously set `TRON_PRIVATE_KEY` / `BSC_PRIVATE_KEY` directly in `.env`, run `npx agent-wallet init` to migrate those keys into the keystore. The raw env-var references are no longer used by the signer classes.
+
 ### Configuration
 
 Copy `.env.sample` to `.env` and fill in your values:

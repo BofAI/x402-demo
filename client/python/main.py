@@ -68,11 +68,29 @@ async def main():
     # --- Create signers for every chain family ---
     tron_signer = await TronClientSigner.create()
 
-    # Initialize GasFree API clients
+    # Initialize GasFree API clients (credentials optional; falls back to unauthenticated)
+    _gf_key_nile = os.getenv("GASFREE_API_KEY_NILE") or os.getenv("GASFREE_API_KEY")
+    _gf_secret_nile = os.getenv("GASFREE_API_SECRET_NILE") or os.getenv("GASFREE_API_SECRET")
+    _gf_key_shasta = os.getenv("GASFREE_API_KEY_SHASTA") or os.getenv("GASFREE_API_KEY")
+    _gf_secret_shasta = os.getenv("GASFREE_API_SECRET_SHASTA") or os.getenv("GASFREE_API_SECRET")
+    _gf_key_mainnet = os.getenv("GASFREE_API_KEY_MAINNET") or os.getenv("GASFREE_API_KEY")
+    _gf_secret_mainnet = os.getenv("GASFREE_API_SECRET_MAINNET") or os.getenv("GASFREE_API_SECRET")
     gasfree_clients = {
-        "tron:nile": GasFreeAPIClient(NetworkConfig.get_gasfree_api_base_url("tron:nile")),
-        "tron:shasta": GasFreeAPIClient(NetworkConfig.get_gasfree_api_base_url("tron:shasta")),
-        "tron:mainnet": GasFreeAPIClient(NetworkConfig.get_gasfree_api_base_url("tron:mainnet")),
+        "tron:nile": GasFreeAPIClient(
+            NetworkConfig.get_gasfree_api_base_url("tron:nile"),
+            api_key=_gf_key_nile,
+            api_secret=_gf_secret_nile,
+        ),
+        "tron:shasta": GasFreeAPIClient(
+            NetworkConfig.get_gasfree_api_base_url("tron:shasta"),
+            api_key=_gf_key_shasta,
+            api_secret=_gf_secret_shasta,
+        ),
+        "tron:mainnet": GasFreeAPIClient(
+            NetworkConfig.get_gasfree_api_base_url("tron:mainnet"),
+            api_key=_gf_key_mainnet,
+            api_secret=_gf_secret_mainnet,
+        ),
     }
 
     # --- Register mechanisms for ALL networks ---
