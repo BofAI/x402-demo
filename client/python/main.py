@@ -105,7 +105,7 @@ async def main():
     # Balance policy: auto-resolves signers from registered mechanisms
     x402_client.register_policy(SufficientBalancePolicy)
     # Register custom selection policy (AFTER balance check)
-    x402_client.register_policy(PreferGasFreeUSDTPolicy)
+    # x402_client.register_policy(PreferGasFreeUSDTPolicy)
 
     print(f"\nSupported Networks and Tokens:")
     for network_name in ["tron:mainnet", "tron:nile", "tron:shasta", "eip155:97"]:

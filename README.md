@@ -50,7 +50,7 @@ The demo simulates a payment workflow involving three conceptual agents:
 |---------|----------|--------|-----------------|
 | TRON Nile (testnet) | `tron:nile` | USDT, USDD | `exact_permit`, `exact_gasfree` |
 | TRON Shasta (testnet) | `tron:shasta` | USDT | `exact_permit` |
-| TRON Mainnet | `tron:mainnet` | USDT, USDD | `exact_permit` |
+| TRON Mainnet | `tron:mainnet` | USDT, USDD | `exact_permit`, `exact_gasfree` (USDT only) |
 | BSC Testnet (optional) | `eip155:97` | USDT, USDC, DHLU | `exact_permit`, `exact` |
 | BSC Mainnet (optional) | `eip155:56` | USDC, USDT, EPS | `exact_permit`, `exact` |
 
@@ -58,7 +58,7 @@ The demo simulates a payment workflow involving three conceptual agents:
 
 ### GasFree (Gasless Transactions)
 
-GasFree eliminates transaction fees for TRON payments. When enabled, the client can use a custom selection policy (`PreferGasFreeUSDTPolicy`) to automatically prefer gasless transactions.
+GasFree eliminates transaction fees for TRON payments. When enabled, the client can use a custom selection policy (`PreferGasFreeUSDTPolicy`) to automatically prefer gasless transactions. In this demo, GasFree is available on Nile and Mainnet (USDT only) when the corresponding `GASFREE_API_KEY_*` / `GASFREE_API_SECRET_*` values are set.
 
 ---
 
@@ -100,6 +100,8 @@ BSC_PAY_TO_ADDRESS=<server_recipient_evm_address>
 # Optional: GasFree gasless transactions (per-network)
 GASFREE_API_KEY_NILE=<key>
 GASFREE_API_SECRET_NILE=<secret>
+GASFREE_API_KEY_MAINNET=<key>
+GASFREE_API_SECRET_MAINNET=<secret>
 
 # Optional: Facilitator authentication
 FACILITATOR_API_KEY=<your_api_key>
