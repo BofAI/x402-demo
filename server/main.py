@@ -55,6 +55,15 @@ BSC_PAY_TO_ADDRESS = os.getenv("BSC_PAY_TO_ADDRESS", "")
 if not PAY_TO_ADDRESS:
     raise ValueError("PAY_TO_ADDRESS environment variable is required")
 
+# GasFree flags (kept in sync with facilitator envs)
+gasfree_api_key_nile = os.getenv("GASFREE_API_KEY_NILE") or os.getenv("GASFREE_API_KEY")
+gasfree_api_secret_nile = os.getenv("GASFREE_API_SECRET_NILE") or os.getenv("GASFREE_API_SECRET")
+gasfree_enabled_nile = bool(gasfree_api_key_nile and gasfree_api_secret_nile)
+
+gasfree_api_key_mainnet = os.getenv("GASFREE_API_KEY_MAINNET") or os.getenv("GASFREE_API_KEY")
+gasfree_api_secret_mainnet = os.getenv("GASFREE_API_SECRET_MAINNET") or os.getenv("GASFREE_API_SECRET")
+gasfree_enabled_mainnet = bool(gasfree_api_key_mainnet and gasfree_api_secret_mainnet)
+
 # Network selection - Change this to use different networks
 # Options: NetworkConfig.TRON_MAINNET, NetworkConfig.TRON_NILE,
 # NetworkConfig.TRON_SHASTA
@@ -75,7 +84,10 @@ _request_count = 0
 # Initialize server (TRON mechanisms auto-registered by default)
 server = X402Server()
 # Register TRON GasFree mechanism
-server.register(NetworkConfig.TRON_NILE, ExactGasFreeServerMechanism())
+if gasfree_enabled_nile:
+    server.register(NetworkConfig.TRON_NILE, ExactGasFreeServerMechanism())
+if gasfree_enabled_mainnet:
+    server.register(NetworkConfig.TRON_MAINNET, ExactGasFreeServerMechanism())
 # Register BSC mechanisms (optional - requires BSC_PAY_TO_ADDRESS)
 if BSC_PAY_TO_ADDRESS:
     server.register(NetworkConfig.BSC_TESTNET, ExactPermitEvmServerMechanism())
@@ -97,6 +109,8 @@ print(f"Current Network: {CURRENT_NETWORK}")
 print(f"Pay To Address: {PAY_TO_ADDRESS}")
 print(f"Facilitator URL: {FACILITATOR_URL}")
 print(f"Facilitator API Key: {'*configured*' if FACILITATOR_API_KEY else '(not set)'}")
+print(f"GasFree Nile Enabled: {gasfree_enabled_nile}")
+print(f"GasFree Mainnet Enabled: {gasfree_enabled_mainnet}")
 permit_address = NetworkConfig.get_payment_permit_address(CURRENT_NETWORK)
 print(f"PaymentPermit Contract: {permit_address}")
 
@@ -167,11 +181,17 @@ async def root():
     }
 
 
+NILE_PRICES = ["0.0001 USDT", "0.0001 USDD"]
+NILE_SCHEMES = ["exact_permit", "exact_permit"]
+if gasfree_enabled_nile:
+    NILE_PRICES.append("0.0001 USDT")
+    NILE_SCHEMES.append("exact_gasfree")
+
 @app.get("/protected-nile")
 @x402_protected(
     server=server,
-    prices=["0.0001 USDT", "0.0001 USDD", "0.0001 USDT", "0.0001 USDD"],
-    schemes=["exact_permit", "exact_permit", "exact_gasfree", "exact_gasfree"],
+    prices=NILE_PRICES,
+    schemes=NILE_SCHEMES,
     network=CURRENT_NETWORK,
     pay_to=PAY_TO_ADDRESS,
 )
@@ -215,11 +235,18 @@ async def protected_shasta_endpoint(request: Request):
     return StreamingResponse(buf, media_type="image/png")
 
 
+MAINNET_PRICES = ["0.0001 USDT", "0.0001 USDD"]
+MAINNET_SCHEMES = ["exact_permit", "exact_permit"]
+if gasfree_enabled_mainnet:
+    MAINNET_PRICES.append("0.0001 USDT")
+    MAINNET_SCHEMES.append("exact_gasfree")
+
+
 @app.get("/protected-mainnet")
 @x402_protected(
     server=server,
-    prices=["0.0001 USDT", "0.0001 USDD"],
-    schemes=["exact_permit", "exact_permit"],
+    prices=MAINNET_PRICES,
+    schemes=MAINNET_SCHEMES,
     network=NetworkConfig.TRON_MAINNET,
     pay_to=PAY_TO_ADDRESS,
 )
@@ -299,7 +326,7 @@ if __name__ == "__main__":
     print("Endpoints:")
     print("  /protected-nile         - Payment (0.0001 USDT) [Nile testnet]")
     print("  /protected-shasta       - Payment (0.0001 USDT) [Shasta testnet]")
-    print("  /protected-mainnet      - Payment (0.0001 USDT/USDD) [Mainnet]")
+    print("  /protected-mainnet      - Payment (0.0001 USDT/USDD) [Mainnet, GasFree USDT if enabled]")
     print("  /protected-bsc-mainnet  - Payment (0.0001 USDC/USDT/EPS) [BSC Mainnet]")
     print("  /protected-bsc-testnet  - Payment (0.0001 USDT/USDC/DHLU) [BSC Testnet]")
     print("=" * 80 + "\n")

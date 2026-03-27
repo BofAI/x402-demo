@@ -84,17 +84,23 @@ gasfree_api_key_nile = os.getenv("GASFREE_API_KEY_NILE") or os.getenv("GASFREE_A
 gasfree_api_secret_nile = os.getenv("GASFREE_API_SECRET_NILE") or os.getenv("GASFREE_API_SECRET")
 gasfree_enabled_nile = bool(gasfree_api_key_nile and gasfree_api_secret_nile)
 
-gasfree_clients = (
-    {
-        "tron:nile": GasFreeAPIClient(
-            NetworkConfig.get_gasfree_api_base_url("tron:nile"),
-            api_key=gasfree_api_key_nile,
-            api_secret=gasfree_api_secret_nile,
-        ),
-    }
-    if gasfree_enabled_nile
-    else {}
-)
+gasfree_api_key_mainnet = os.getenv("GASFREE_API_KEY_MAINNET") or os.getenv("GASFREE_API_KEY")
+gasfree_api_secret_mainnet = os.getenv("GASFREE_API_SECRET_MAINNET") or os.getenv("GASFREE_API_SECRET")
+gasfree_enabled_mainnet = bool(gasfree_api_key_mainnet and gasfree_api_secret_mainnet)
+
+gasfree_clients: dict[str, GasFreeAPIClient] = {}
+if gasfree_enabled_nile:
+    gasfree_clients["tron:nile"] = GasFreeAPIClient(
+        NetworkConfig.get_gasfree_api_base_url("tron:nile"),
+        api_key=gasfree_api_key_nile,
+        api_secret=gasfree_api_secret_nile,
+    )
+if gasfree_enabled_mainnet:
+    gasfree_clients["tron:mainnet"] = GasFreeAPIClient(
+        NetworkConfig.get_gasfree_api_base_url("tron:mainnet"),
+        api_key=gasfree_api_key_mainnet,
+        api_secret=gasfree_api_secret_mainnet,
+    )
 
 all_networks = [f"tron:{n}" for n in TRON_NETWORKS] + [NetworkConfig.BSC_MAINNET, NetworkConfig.BSC_TESTNET]
 
@@ -112,8 +118,15 @@ async def lifespan(app: FastAPI):
         )
         facilitator.register([f"tron:{network}"], mechanism)
 
-        # Add GasFree support for nile
+        # Add GasFree support for Nile and Mainnet (USDT only; enforced by server pricing)
         if network == "nile" and gasfree_enabled_nile:
+            gasfree_mechanism = ExactGasFreeFacilitatorMechanism(
+                tron_signer,
+                clients=gasfree_clients,
+                base_fee=TRON_BASE_FEE,
+            )
+            facilitator.register([f"tron:{network}"], gasfree_mechanism)
+        if network == "mainnet" and gasfree_enabled_mainnet:
             gasfree_mechanism = ExactGasFreeFacilitatorMechanism(
                 tron_signer,
                 clients=gasfree_clients,
@@ -152,6 +165,7 @@ async def lifespan(app: FastAPI):
     print("=" * 80)
     print(f"TRON Base Fee: {TRON_BASE_FEE}")
     print(f"GasFree Nile Enabled: {gasfree_enabled_nile}")
+    print(f"GasFree Mainnet Enabled: {gasfree_enabled_mainnet}")
     print(f"Supported Networks: {', '.join(all_networks)}")
 
     print(f"\nNetwork Details:")
