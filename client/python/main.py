@@ -135,10 +135,10 @@ def register_signers(client: x402ClientSync, networks: set[str]) -> dict[str, st
     needs_evm = any(n.startswith("eip155:") for n in networks)
 
     if needs_tron:
-        from bankofai.x402.mechanisms.tron import ClientTronSigner, register_exact_tron_client
+        from bankofai.x402.mechanisms.tron import ClientTronWebSigner, register_exact_tron_client
 
         tron_private_key = get_private_key_for_network("tron:nile")
-        tron_signer = ClientTronSigner(private_key=tron_private_key)
+        tron_signer = ClientTronWebSigner(private_key=tron_private_key)
         register_exact_tron_client(client, tron_signer)
         addresses["tron"] = tron_signer.address
         print(f"  Registered TRON signer (address: {tron_signer.address})")

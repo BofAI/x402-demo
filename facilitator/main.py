@@ -16,7 +16,7 @@ import uvicorn
 from bankofai.x402 import x402FacilitatorSync, PaymentPayload, PaymentRequirements
 from bankofai.x402.mechanisms.evm import FacilitatorWeb3Signer
 from bankofai.x402.mechanisms.evm.exact import register_exact_evm_facilitator
-from bankofai.x402.mechanisms.tron import FacilitatorTronSigner, register_exact_tron_facilitator
+from bankofai.x402.mechanisms.tron import FacilitatorTronWebSigner, register_exact_tron_facilitator
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 if str(ROOT_DIR) not in sys.path:
@@ -83,7 +83,7 @@ for net in NETWORKS:
         continue
 
     if net["type"] == "tron":
-        signer = FacilitatorTronSigner(private_key=private_key, full_node=net["rpc_url"])
+        signer = FacilitatorTronWebSigner(private_key=private_key, full_node=net["rpc_url"])
         register_exact_tron_facilitator(facilitator, signer, networks=[net["network"]])
         print(f"  [{net['label']}] Facilitator Address: {signer.address}")
 
