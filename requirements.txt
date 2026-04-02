@@ -2,7 +2,7 @@
 # Install with: pip install -r requirements.txt
 
 # Core bankofai-x402 SDK with TRON and FastAPI support (GitHub branch)
-bankofai-x402[tron,fastapi] @ git+ssh://git@github.com/BofAI/x402.git@feature/bankofai-gasfree-proxy#subdirectory=python/x402
+bankofai-x402[tron,fastapi] >= 0.5.8b0
 
 # Web framework
 fastapi>=0.104.0
