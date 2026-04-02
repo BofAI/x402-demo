@@ -32,11 +32,33 @@ if [ ! -f ".env" ]; then
     exit 1
 fi
 
+ensure_py_demo_deps() {
+    local venv_python="$SCRIPT_DIR/.venv/bin/python"
+    local local_x402_dir="${X402_SDK_DIR:-$SCRIPT_DIR/../x402}"
+    local stamp_file="$SCRIPT_DIR/.x402-demo-deps-stamp"
+    local current_head=""
+
+    if [ ! -x "$venv_python" ]; then
+        echo "Bootstrapping Python dependencies for x402-demo..."
+        bash "$SCRIPT_DIR/install_deps.sh"
+        return
+    fi
+
+    if git -C "$local_x402_dir" rev-parse HEAD >/dev/null 2>&1; then
+        current_head="$(git -C "$local_x402_dir" rev-parse HEAD)"
+        if [ ! -f "$stamp_file" ] || [ "$(cat "$stamp_file")" != "$current_head" ]; then
+            echo "Syncing x402-demo dependencies with local x402 SDK..."
+            bash "$SCRIPT_DIR/install_deps.sh"
+        fi
+    fi
+}
+
 case "$COMPONENT" in
     server)
         echo "=========================================="
         echo "Starting X402 Protected Resource Server"
         echo "=========================================="
+        ensure_py_demo_deps
         cd server
         "$SCRIPT_DIR/.venv/bin/python" main.py
         ;;
@@ -44,6 +66,7 @@ case "$COMPONENT" in
         echo "=========================================="
         echo "Starting X402 Facilitator"
         echo "=========================================="
+        ensure_py_demo_deps
         cd facilitator
         "$SCRIPT_DIR/.venv/bin/python" main.py
         ;;
@@ -51,6 +74,7 @@ case "$COMPONENT" in
         echo "=========================================="
         echo "Starting X402 Client (Python)"
         echo "=========================================="
+        ensure_py_demo_deps
         cd client/python
         "$SCRIPT_DIR/.venv/bin/python" main.py
         ;;

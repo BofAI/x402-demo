@@ -11,6 +11,9 @@ import { dirname, join, resolve } from 'path';
 import { fileURLToPath } from 'url';
 import { writeFileSync } from 'fs';
 import { tmpdir } from 'os';
+import { createWalletClient, http, type Hex } from 'viem';
+import { privateKeyToAccount } from 'viem/accounts';
+import { bsc, bscTestnet } from 'viem/chains';
 import {
   X402Client,
   X402FetchClient,
@@ -31,6 +34,13 @@ import {
   findByAddress,
 } from '@bankofai/x402';
 
+type AgentWallet = {
+  getAddress(): Promise<string>;
+  signMessage(msg: Uint8Array): Promise<string>;
+  signTypedData(data: Record<string, unknown>): Promise<string>;
+  signTransaction(payload: Record<string, unknown>): Promise<string>;
+};
+
 // ---------------------------------------------------------------------------
 // Configuration
 // ---------------------------------------------------------------------------
@@ -39,14 +49,10 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 config({ path: resolve(__dirname, '../../../.env') });
 
 const SERVER_URL       = process.env.SERVER_URL ?? 'http://localhost:8000';
-// For TRON mainnet, set TRON_GRID_API_KEY in .env — the signer reads it from env automatically.
-
-// Change ENDPOINT to target a different server resource.
-// The server may return accepts[] spanning multiple networks.
-const ENDPOINT         = '/protected-nile';
-// const ENDPOINT         = '/protected-mainnet';
-// const ENDPOINT         = '/protected-bsc-mainnet';
-// const ENDPOINT         = '/protected-bsc-testnet';
+const ENDPOINT         = process.env.ENDPOINT ?? '/protected-nile';
+const PREFERRED_NETWORK = process.env.PREFERRED_NETWORK;
+const BSC_CLIENT_PRIVATE_KEY = process.env.BSC_CLIENT_PRIVATE_KEY;
+const BSC_TESTNET_RPC_URL = process.env.BSC_TESTNET_RPC_URL ?? 'https://data-seed-prebsc-1-s1.binance.org:8545';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -73,18 +79,87 @@ async function saveImage(response: Response): Promise<string> {
   return path;
 }
 
+function createLocalEvmWallet(privateKey: Hex): AgentWallet {
+  const account = privateKeyToAccount(privateKey);
+
+  return {
+    async getAddress(): Promise<string> {
+      return account.address;
+    },
+    async signMessage(msg: Uint8Array): Promise<string> {
+      return account.signMessage({ message: { raw: msg } });
+    },
+    async signTypedData(data: Record<string, unknown>): Promise<string> {
+      const {
+        domain,
+        types,
+        primaryType,
+        message,
+      } = data as {
+        domain: Record<string, unknown>;
+        types: Record<string, unknown>;
+        primaryType: string;
+        message: Record<string, unknown>;
+      };
+      const normalizedTypes = { ...types } as Record<string, unknown>;
+      delete normalizedTypes.EIP712Domain;
+      return account.signTypedData({
+        domain: domain as any,
+        types: normalizedTypes as any,
+        primaryType: primaryType as any,
+        message: message as any,
+      });
+    },
+    async signTransaction(payload: Record<string, unknown>): Promise<string> {
+      const chainId = Number(payload.chainId ?? 97);
+      const chain = chainId === 56 ? bsc : bscTestnet;
+      const rpcUrl = chainId === 56
+        ? (process.env.BSC_MAINNET_RPC_URL ?? 'https://bsc-dataseed.binance.org')
+        : BSC_TESTNET_RPC_URL;
+      const client = createWalletClient({
+        account,
+        chain,
+        transport: http(rpcUrl),
+      });
+      const signed = await client.signTransaction(payload as any);
+      return signed.replace(/^0x/, '');
+    },
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
 
 async function main(): Promise<void> {
   // --- Create signers for every chain family ---
-  const tronSigner = await TronClientSigner.create();
+  let tronSigner: TronClientSigner | null = null;
+  try {
+    tronSigner = await TronClientSigner.create();
+  } catch (error) {
+    if (!PREFERRED_NETWORK?.startsWith('tron:')) {
+      console.warn('Skipping TRON signer:', error instanceof Error ? error.message : String(error));
+    } else {
+      throw error;
+    }
+  }
+
+  const localEvmWallet = BSC_CLIENT_PRIVATE_KEY
+    ? createLocalEvmWallet(BSC_CLIENT_PRIVATE_KEY as Hex)
+    : null;
+  const evmSigner = localEvmWallet
+    ? new EvmClientSigner(localEvmWallet)
+    : await EvmClientSigner.create();
+  if (BSC_CLIENT_PRIVATE_KEY) {
+    evmSigner.setAddress(await localEvmWallet!.getAddress());
+  }
 
   hr();
   console.log('X402 Client (TypeScript · Multi-Network)');
   hr();
-  console.log(`  TRON Address : ${tronSigner.getAddress()}`);
+  if (tronSigner) console.log(`  TRON Address : ${tronSigner.getAddress()}`);
+  console.log(`  BSC Address  : ${evmSigner.getAddress()}`);
+  if (PREFERRED_NETWORK) console.log(`  Preferred    : ${PREFERRED_NETWORK}`);
   console.log(`  Resource     : ${SERVER_URL}${ENDPOINT}`);
   hr();
 
@@ -97,10 +172,11 @@ async function main(): Promise<void> {
 
   // --- Register mechanisms for ALL networks ---
   const x402 = new X402Client({ tokenStrategy: new DefaultTokenSelectionStrategy() });
-  x402.register('tron:*', new ExactPermitTronClientMechanism(tronSigner));
-  x402.register('tron:*', new ExactGasFreeClientMechanism(tronSigner, gasfreeClients));
+  if (tronSigner) {
+    x402.register('tron:*', new ExactPermitTronClientMechanism(tronSigner));
+    x402.register('tron:*', new ExactGasFreeClientMechanism(tronSigner, gasfreeClients));
+  }
 
-  const evmSigner = await EvmClientSigner.create();
   x402.register('eip155:97', new ExactPermitEvmClientMechanism(evmSigner));
   x402.register('eip155:97', new ExactEvmClientMechanism(evmSigner));
   x402.register('eip155:56', new ExactPermitEvmClientMechanism(evmSigner));
@@ -108,6 +184,16 @@ async function main(): Promise<void> {
 
   // Balance policy: auto-resolves signers from registered mechanisms
   x402.registerPolicy(SufficientBalancePolicy);
+
+  if (PREFERRED_NETWORK) {
+    const preferredNetwork = PREFERRED_NETWORK;
+    x402.registerPolicy({
+      apply(requirements: PaymentRequirements[]): PaymentRequirements[] {
+        const preferred = requirements.filter((req) => req.network === preferredNetwork);
+        return preferred.length > 0 ? preferred : requirements;
+      },
+    });
+  }
 
   // Prefer exact_gasfree USDT (same as Python client's PreferGasFreeUSDTPolicy)
   x402.registerPolicy({

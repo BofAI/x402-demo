@@ -2,7 +2,9 @@
 
 ## Overview
 
-The **X402 Demo** provides a practical demonstration of integrating the **x402 payment protocol** with the TRON and BSC blockchains. It showcases how decentralized micropayments can enable pay-per-access workflows — including gasless transactions via GasFree and multi-agent orchestration via A2A.
+The **X402 Demo** provides a practical demonstration of integrating the **x402 payment protocol** with the TRON and BSC blockchains. It showcases how decentralized micropayments can enable pay-per-access workflows, including gasless transactions via GasFree and multi-agent orchestration via A2A.
+
+For local BSC interoperability work, this demo is wired to the sibling [x402](/Users/bobo/code/x402/x402) repository instead of the published `0.5.7` package. That lets the demo consume the `001-exact-v2-compat` SDK changes directly.
 
 ### Payment Workflow
 
@@ -51,10 +53,10 @@ The demo simulates a payment workflow involving three conceptual agents:
 | TRON Nile (testnet) | `tron:nile` | USDT, USDD | `exact_permit`, `exact_gasfree` |
 | TRON Shasta (testnet) | `tron:shasta` | USDT | `exact_permit` |
 | TRON Mainnet | `tron:mainnet` | USDT, USDD | `exact_permit`, `exact_gasfree` (USDT only) |
-| BSC Testnet (optional) | `eip155:97` | USDT, USDC, DHLU | `exact_permit`, `exact` |
+| BSC Testnet (optional) | `eip155:97` | USDT, DHLU | `exact_permit`, `exact` |
 | BSC Mainnet (optional) | `eip155:56` | USDC, USDT, EPS | `exact_permit`, `exact` |
 
-> BSC support requires `BSC_PRIVATE_KEY` to be configured.
+> On BSC testnet, `exact` uses the DHLU token because it supports the ERC-3009 / `eip3009` transfer flow required for Coinbase v2 interoperability.
 
 ### GasFree (Gasless Transactions)
 
@@ -71,7 +73,9 @@ GasFree eliminates transaction fees for TRON payments. When enabled, the client 
 
 ### Agent Wallet Setup
 
-The Python and TypeScript clients use `TronClientSigner.create()` / `EvmClientSigner.create()` (and the facilitator uses `TronFacilitatorSigner.create()` / `EvmFacilitatorSigner.create()`) instead of reading raw private keys directly. These signers are provided by the `@bankofai/agent-wallet` package and load credentials via the **agent-wallet** key store.
+TRON paths still use `TronClientSigner.create()` / `TronFacilitatorSigner.create()` and therefore rely on the `@bankofai/agent-wallet` key store.
+
+For BSC demo flows, the Python facilitator, Python client, and TypeScript client can run directly from `BSC_FACILITATOR_PRIVATE_KEY` / `BSC_CLIENT_PRIVATE_KEY`, which makes local BSC smoke tests independent from agent-wallet.
 
 **First-time setup:**
 ```bash
@@ -86,16 +90,17 @@ This interactive CLI stores your TRON and EVM private keys in a local encrypted 
 Copy `.env.sample` to `.env` and fill in your values:
 
 ```env
-# Required
-TRON_PRIVATE_KEY=<your_tron_private_key>
+# Required for TRON routes
 PAY_TO_ADDRESS=<server_recipient_tron_address>
 
 # Optional: TronGrid API key for mainnet RPC access
 TRON_GRID_API_KEY=<your_trongrid_api_key>
 
 # Optional: BSC support
-BSC_PRIVATE_KEY=<your_evm_private_key>
+BSC_CLIENT_PRIVATE_KEY=<your_bsc_client_private_key>
+BSC_FACILITATOR_PRIVATE_KEY=<your_bsc_facilitator_private_key>
 BSC_PAY_TO_ADDRESS=<server_recipient_evm_address>
+BSC_TESTNET_RPC_URL=https://data-seed-prebsc-1-s1.binance.org:8545
 
 # Optional: GasFree gasless transactions (per-network)
 GASFREE_API_KEY_NILE=<key>
@@ -147,6 +152,23 @@ docker-compose up -d
 ```bash
 ./start.sh client-ts
 ```
+
+### BSC Coinbase v2 Smoke
+
+Run the BSC `exact` demo route with DHLU:
+
+```bash
+# terminal 1
+FACILITATOR_PORT=8013 ./start.sh facilitator
+
+# terminal 2
+BSC_PAY_TO=0x6d361463Ad6Df90bC34aF65f4970d3271aa83535 SERVER_PORT=8012 SERVER_URL=http://127.0.0.1:8012 FACILITATOR_URL=http://127.0.0.1:8013 ./start.sh server
+
+# terminal 3
+SERVER_URL=http://127.0.0.1:8012 ENDPOINT=/protected-bsc-testnet-coinbase PREFERRED_NETWORK=eip155:97 ./start.sh client-ts
+```
+
+The compatibility endpoint `/protected-bsc-testnet-coinbase` is the one intended for Coinbase x402 v2 `exact` interoperability checks.
 
 ### Step 3: Access via Openclaw Agent
 
