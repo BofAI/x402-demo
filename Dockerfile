@@ -15,6 +15,10 @@ RUN python -m venv /app/.venv && \
     /app/.venv/bin/pip install --upgrade pip && \
     /app/.venv/bin/pip install -r /app/requirements.txt
 
+# Set environment variables
+ENV PYTHONUNBUFFERED=1
+ENV PATH="/app/.venv/bin:$PATH"
+
 # Copy Python service code
 COPY server/ /app/server/
 
@@ -25,8 +29,4 @@ RUN mkdir -p /app/logs
 # 8000: server
 EXPOSE 8000
 
-# Set environment variables
-ENV PYTHONUNBUFFERED=1
-ENV PATH="/app/.venv/bin:$PATH"
-
-CMD ["/app/.venv/bin/python", "/app/server/main.py"]
+CMD ["bash", "-c", "python /app/server/main.py 2>&1 | tee -a /app/logs/server.log"]
