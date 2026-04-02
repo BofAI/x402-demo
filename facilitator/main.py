@@ -80,27 +80,23 @@ BSC_MAINNET_BASE_FEE = {
 # Initialize X402Facilitator
 facilitator = X402Facilitator()
 
-gasfree_api_key_nile = os.getenv("GASFREE_API_KEY_NILE") or os.getenv("GASFREE_API_KEY")
-gasfree_api_secret_nile = os.getenv("GASFREE_API_SECRET_NILE") or os.getenv("GASFREE_API_SECRET")
-gasfree_enabled_nile = bool(gasfree_api_key_nile and gasfree_api_secret_nile)
+def _get_gasfree_base_url(network: str) -> str:
+    """Get GasFree API base URL from env var, falling back to NetworkConfig."""
+    env_suffix = network.split(":")[-1].upper()
+    return os.getenv(f"GASFREE_API_BASE_URL_{env_suffix}") or NetworkConfig.get_gasfree_api_base_url(network)
 
-gasfree_api_key_mainnet = os.getenv("GASFREE_API_KEY_MAINNET") or os.getenv("GASFREE_API_KEY")
-gasfree_api_secret_mainnet = os.getenv("GASFREE_API_SECRET_MAINNET") or os.getenv("GASFREE_API_SECRET")
-gasfree_enabled_mainnet = bool(gasfree_api_key_mainnet and gasfree_api_secret_mainnet)
+# GasFree enable flags (default to true; set to "false" to disable)
+gasfree_enabled_nile = os.getenv("GASFREE_ENABLED_NILE", "true").lower() != "false"
+gasfree_enabled_shasta = os.getenv("GASFREE_ENABLED_SHASTA", "true").lower() != "false"
+gasfree_enabled_mainnet = os.getenv("GASFREE_ENABLED_MAINNET", "true").lower() != "false"
 
 gasfree_clients: dict[str, GasFreeAPIClient] = {}
 if gasfree_enabled_nile:
-    gasfree_clients["tron:nile"] = GasFreeAPIClient(
-        NetworkConfig.get_gasfree_api_base_url("tron:nile"),
-        api_key=gasfree_api_key_nile,
-        api_secret=gasfree_api_secret_nile,
-    )
+    gasfree_clients["tron:nile"] = GasFreeAPIClient(_get_gasfree_base_url("tron:nile"))
+if gasfree_enabled_shasta:
+    gasfree_clients["tron:shasta"] = GasFreeAPIClient(_get_gasfree_base_url("tron:shasta"))
 if gasfree_enabled_mainnet:
-    gasfree_clients["tron:mainnet"] = GasFreeAPIClient(
-        NetworkConfig.get_gasfree_api_base_url("tron:mainnet"),
-        api_key=gasfree_api_key_mainnet,
-        api_secret=gasfree_api_secret_mainnet,
-    )
+    gasfree_clients["tron:mainnet"] = GasFreeAPIClient(_get_gasfree_base_url("tron:mainnet"))
 
 all_networks = [f"tron:{n}" for n in TRON_NETWORKS] + [NetworkConfig.BSC_MAINNET, NetworkConfig.BSC_TESTNET]
 
@@ -118,15 +114,9 @@ async def lifespan(app: FastAPI):
         )
         facilitator.register([f"tron:{network}"], mechanism)
 
-        # Add GasFree support for Nile and Mainnet (USDT only; enforced by server pricing)
-        if network == "nile" and gasfree_enabled_nile:
-            gasfree_mechanism = ExactGasFreeFacilitatorMechanism(
-                tron_signer,
-                clients=gasfree_clients,
-                base_fee=TRON_BASE_FEE,
-            )
-            facilitator.register([f"tron:{network}"], gasfree_mechanism)
-        if network == "mainnet" and gasfree_enabled_mainnet:
+        # Add GasFree support (USDT only; enforced by server pricing)
+        gasfree_flags = {"nile": gasfree_enabled_nile, "shasta": gasfree_enabled_shasta, "mainnet": gasfree_enabled_mainnet}
+        if gasfree_flags.get(network, False):
             gasfree_mechanism = ExactGasFreeFacilitatorMechanism(
                 tron_signer,
                 clients=gasfree_clients,
@@ -164,8 +154,12 @@ async def lifespan(app: FastAPI):
     print("X402 Payment Facilitator - Configuration")
     print("=" * 80)
     print(f"TRON Base Fee: {TRON_BASE_FEE}")
-    print(f"GasFree Nile Enabled: {gasfree_enabled_nile}")
-    print(f"GasFree Mainnet Enabled: {gasfree_enabled_mainnet}")
+    for net_name, enabled in [("nile", gasfree_enabled_nile), ("shasta", gasfree_enabled_shasta), ("mainnet", gasfree_enabled_mainnet)]:
+        key = f"tron:{net_name}"
+        if enabled:
+            print(f"GasFree {net_name.capitalize()}: enabled ({gasfree_clients[key].base_url})")
+        else:
+            print(f"GasFree {net_name.capitalize()}: disabled")
     print(f"Supported Networks: {', '.join(all_networks)}")
 
     print(f"\nNetwork Details:")

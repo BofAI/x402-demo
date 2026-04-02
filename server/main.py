@@ -55,14 +55,10 @@ BSC_PAY_TO_ADDRESS = os.getenv("BSC_PAY_TO_ADDRESS", "")
 if not PAY_TO_ADDRESS:
     raise ValueError("PAY_TO_ADDRESS environment variable is required")
 
-# GasFree flags (kept in sync with facilitator envs)
-gasfree_api_key_nile = os.getenv("GASFREE_API_KEY_NILE") or os.getenv("GASFREE_API_KEY")
-gasfree_api_secret_nile = os.getenv("GASFREE_API_SECRET_NILE") or os.getenv("GASFREE_API_SECRET")
-gasfree_enabled_nile = bool(gasfree_api_key_nile and gasfree_api_secret_nile)
-
-gasfree_api_key_mainnet = os.getenv("GASFREE_API_KEY_MAINNET") or os.getenv("GASFREE_API_KEY")
-gasfree_api_secret_mainnet = os.getenv("GASFREE_API_SECRET_MAINNET") or os.getenv("GASFREE_API_SECRET")
-gasfree_enabled_mainnet = bool(gasfree_api_key_mainnet and gasfree_api_secret_mainnet)
+# GasFree enable flags (default to true; set to "false" to disable)
+gasfree_enabled_nile = os.getenv("GASFREE_ENABLED_NILE", "true").lower() != "false"
+gasfree_enabled_shasta = os.getenv("GASFREE_ENABLED_SHASTA", "true").lower() != "false"
+gasfree_enabled_mainnet = os.getenv("GASFREE_ENABLED_MAINNET", "true").lower() != "false"
 
 # Network selection - Change this to use different networks
 # Options: NetworkConfig.TRON_MAINNET, NetworkConfig.TRON_NILE,
@@ -86,6 +82,8 @@ server = X402Server()
 # Register TRON GasFree mechanism
 if gasfree_enabled_nile:
     server.register(NetworkConfig.TRON_NILE, ExactGasFreeServerMechanism())
+if gasfree_enabled_shasta:
+    server.register(NetworkConfig.TRON_SHASTA, ExactGasFreeServerMechanism())
 if gasfree_enabled_mainnet:
     server.register(NetworkConfig.TRON_MAINNET, ExactGasFreeServerMechanism())
 # Register BSC mechanisms (optional - requires BSC_PAY_TO_ADDRESS)
@@ -110,6 +108,7 @@ print(f"Pay To Address: {PAY_TO_ADDRESS}")
 print(f"Facilitator URL: {FACILITATOR_URL}")
 print(f"Facilitator API Key: {'*configured*' if FACILITATOR_API_KEY else '(not set)'}")
 print(f"GasFree Nile Enabled: {gasfree_enabled_nile}")
+print(f"GasFree Shasta Enabled: {gasfree_enabled_shasta}")
 print(f"GasFree Mainnet Enabled: {gasfree_enabled_mainnet}")
 permit_address = NetworkConfig.get_payment_permit_address(CURRENT_NETWORK)
 print(f"PaymentPermit Contract: {permit_address}")
@@ -211,11 +210,17 @@ async def protected_endpoint(request: Request):
     return StreamingResponse(buf, media_type="image/png")
 
 
+SHASTA_PRICES = ["0.0001 USDT"]
+SHASTA_SCHEMES = ["exact_permit"]
+if gasfree_enabled_shasta:
+    SHASTA_PRICES.append("0.0001 USDT")
+    SHASTA_SCHEMES.append("exact_gasfree")
+
 @app.get("/protected-shasta")
 @x402_protected(
     server=server,
-    prices=["0.0001 USDT"],
-    schemes=["exact_permit"],
+    prices=SHASTA_PRICES,
+    schemes=SHASTA_SCHEMES,
     network=NetworkConfig.TRON_SHASTA,
     pay_to=PAY_TO_ADDRESS,
 )
