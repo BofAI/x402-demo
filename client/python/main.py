@@ -46,6 +46,11 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 
+def _get_gasfree_base_url(network: str) -> str:
+    """Get GasFree API base URL from env var, falling back to NetworkConfig."""
+    env_suffix = network.split(":")[-1].upper()
+    return os.getenv(f"GASFREE_API_BASE_URL_{env_suffix}") or NetworkConfig.get_gasfree_api_base_url(network)
+
 # Load environment variables
 load_dotenv()
 
@@ -68,29 +73,12 @@ async def main():
     # --- Create signers for every chain family ---
     tron_signer = await TronClientSigner.create()
 
-    # Initialize GasFree API clients (credentials optional; falls back to unauthenticated)
-    _gf_key_nile = os.getenv("GASFREE_API_KEY_NILE") or os.getenv("GASFREE_API_KEY")
-    _gf_secret_nile = os.getenv("GASFREE_API_SECRET_NILE") or os.getenv("GASFREE_API_SECRET")
-    _gf_key_shasta = os.getenv("GASFREE_API_KEY_SHASTA") or os.getenv("GASFREE_API_KEY")
-    _gf_secret_shasta = os.getenv("GASFREE_API_SECRET_SHASTA") or os.getenv("GASFREE_API_SECRET")
-    _gf_key_mainnet = os.getenv("GASFREE_API_KEY_MAINNET") or os.getenv("GASFREE_API_KEY")
-    _gf_secret_mainnet = os.getenv("GASFREE_API_SECRET_MAINNET") or os.getenv("GASFREE_API_SECRET")
+    # Initialize GasFree API clients
+    # Base URLs can be overridden via env vars; falls back to NetworkConfig defaults
     gasfree_clients = {
-        "tron:nile": GasFreeAPIClient(
-            NetworkConfig.get_gasfree_api_base_url("tron:nile"),
-            api_key=_gf_key_nile,
-            api_secret=_gf_secret_nile,
-        ),
-        "tron:shasta": GasFreeAPIClient(
-            NetworkConfig.get_gasfree_api_base_url("tron:shasta"),
-            api_key=_gf_key_shasta,
-            api_secret=_gf_secret_shasta,
-        ),
-        "tron:mainnet": GasFreeAPIClient(
-            NetworkConfig.get_gasfree_api_base_url("tron:mainnet"),
-            api_key=_gf_key_mainnet,
-            api_secret=_gf_secret_mainnet,
-        ),
+        "tron:nile": GasFreeAPIClient(_get_gasfree_base_url("tron:nile")),
+        "tron:shasta": GasFreeAPIClient(_get_gasfree_base_url("tron:shasta")),
+        "tron:mainnet": GasFreeAPIClient(_get_gasfree_base_url("tron:mainnet")),
     }
 
     # --- Register mechanisms for ALL networks ---
@@ -105,7 +93,7 @@ async def main():
     # Balance policy: auto-resolves signers from registered mechanisms
     x402_client.register_policy(SufficientBalancePolicy)
     # Register custom selection policy (AFTER balance check)
-    # x402_client.register_policy(PreferGasFreeUSDTPolicy)
+    x402_client.register_policy(PreferGasFreeUSDTPolicy)
 
     print(f"\nSupported Networks and Tokens:")
     for network_name in ["tron:mainnet", "tron:nile", "tron:shasta", "eip155:97"]:

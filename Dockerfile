@@ -1,8 +1,11 @@
-# x402-tron-demo: Python server
+# x402-tron-demo: Python server + facilitator
 FROM python:3.12-slim
 
-# Install build dependency required by pip git URLs
-RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    supervisor \
+    git \
+    && rm -rf /var/lib/apt/lists/*
 
 # Create app directory
 WORKDIR /app
@@ -17,16 +20,26 @@ RUN python -m venv /app/.venv && \
 
 # Copy Python service code
 COPY server/ /app/server/
+COPY facilitator/ /app/facilitator/
+
+# Copy supervisor configuration
+COPY docker/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+
+# Copy startup script
+COPY docker/entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
 
 # Create logs directory
 RUN mkdir -p /app/logs
 
 # Expose ports
 # 8000: server
-EXPOSE 8000
+# 8001: facilitator
+EXPOSE 8000 8001
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
 ENV PATH="/app/.venv/bin:$PATH"
 
-CMD ["/app/.venv/bin/python", "/app/server/main.py"]
+# Start services via entrypoint
+ENTRYPOINT ["/app/entrypoint.sh"]
