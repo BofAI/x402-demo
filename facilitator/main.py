@@ -106,6 +106,9 @@ async def lifespan(app: FastAPI):
     """Register all mechanisms with async wallet initialization."""
     tron_signer = await TronFacilitatorSigner.create()
 
+    # Add GasFree support (USDT only; enforced by server pricing)
+    gasfree_flags = {"nile": gasfree_enabled_nile, "shasta": gasfree_enabled_shasta, "mainnet": gasfree_enabled_mainnet}
+
     # Register TRON mechanisms
     for network in TRON_NETWORKS:
         mechanism = ExactPermitTronFacilitatorMechanism(
@@ -114,8 +117,6 @@ async def lifespan(app: FastAPI):
         )
         facilitator.register([f"tron:{network}"], mechanism)
 
-        # Add GasFree support (USDT only; enforced by server pricing)
-        gasfree_flags = {"nile": gasfree_enabled_nile, "shasta": gasfree_enabled_shasta, "mainnet": gasfree_enabled_mainnet}
         if gasfree_flags.get(network, False):
             gasfree_mechanism = ExactGasFreeFacilitatorMechanism(
                 tron_signer,
@@ -156,8 +157,11 @@ async def lifespan(app: FastAPI):
     print(f"TRON Base Fee: {TRON_BASE_FEE}")
     for net_name, enabled in [("nile", gasfree_enabled_nile), ("shasta", gasfree_enabled_shasta), ("mainnet", gasfree_enabled_mainnet)]:
         key = f"tron:{net_name}"
-        if enabled:
-            print(f"GasFree {net_name.capitalize()}: enabled ({gasfree_clients[key].base_url})")
+        client = gasfree_clients.get(key)
+        if enabled and client:
+            print(f"GasFree {net_name.capitalize()}: enabled ({client.base_url})")
+        elif enabled:
+            print(f"GasFree {net_name.capitalize()}: enabled (URL unavailable)")
         else:
             print(f"GasFree {net_name.capitalize()}: disabled")
     print(f"Supported Networks: {', '.join(all_networks)}")

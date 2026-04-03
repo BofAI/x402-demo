@@ -46,6 +46,11 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 
+def _get_gasfree_base_url(network: str) -> str:
+    """Get GasFree API base URL from env var, falling back to NetworkConfig."""
+    env_suffix = network.split(":")[-1].upper()
+    return os.getenv(f"GASFREE_API_BASE_URL_{env_suffix}") or NetworkConfig.get_gasfree_api_base_url(network)
+
 # Load environment variables
 load_dotenv()
 
@@ -70,10 +75,6 @@ async def main():
 
     # Initialize GasFree API clients
     # Base URLs can be overridden via env vars; falls back to NetworkConfig defaults
-    def _get_gasfree_base_url(network: str) -> str:
-        env_suffix = network.split(":")[-1].upper()
-        return os.getenv(f"GASFREE_API_BASE_URL_{env_suffix}") or NetworkConfig.get_gasfree_api_base_url(network)
-
     gasfree_clients = {
         "tron:nile": GasFreeAPIClient(_get_gasfree_base_url("tron:nile")),
         "tron:shasta": GasFreeAPIClient(_get_gasfree_base_url("tron:shasta")),
