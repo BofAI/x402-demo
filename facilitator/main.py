@@ -59,8 +59,8 @@ load_dotenv(Path(__file__).parent / ".env")
 load_dotenv(Path(__file__).parent.parent / ".env")
 
 # Facilitator configuration
-FACILITATOR_HOST = "0.0.0.0"
-FACILITATOR_PORT = 8001
+FACILITATOR_HOST = os.getenv("FACILITATOR_HOST", "0.0.0.0")
+FACILITATOR_PORT = int(os.getenv("FACILITATOR_PORT", "8001"))
 # TRON supported networks
 TRON_NETWORKS = ["mainnet", "shasta", "nile"]
 

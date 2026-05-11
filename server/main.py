@@ -68,8 +68,8 @@ CURRENT_NETWORK = NetworkConfig.TRON_NILE
 # Server configuration
 FACILITATOR_URL = os.getenv("FACILITATOR_URL", "http://localhost:8001")
 FACILITATOR_API_KEY = os.getenv("FACILITATOR_API_KEY", "")  # Optional: for facilitator auth
-SERVER_HOST = "0.0.0.0"
-SERVER_PORT = 8000
+SERVER_HOST = os.getenv("SERVER_HOST", "0.0.0.0")
+SERVER_PORT = int(os.getenv("SERVER_PORT", "8000"))
 
 # Path to protected image
 PROTECTED_IMAGE_PATH = Path(__file__).parent / "protected.png"
