@@ -1,7 +1,7 @@
 {
-  "name": "@x402-tron/ts-client-example",
+  "name": "@x402-demo/facilitator-ts",
   "version": "0.0.1",
-  "description": "x402 TypeScript Terminal Client Example",
+  "description": "x402 TypeScript Payment Facilitator (Hono)",
   "type": "module",
   "private": true,
   "scripts": {
@@ -10,7 +10,9 @@
   },
   "dependencies": {
     "@bankofai/x402": "0.6.0-beta.0",
+    "@hono/node-server": "^1.14.3",
     "dotenv": "^16.3.1",
+    "hono": "^4.12.18",
     "tronweb": "^6.0.0",
     "viem": "^2.45.2"
   },

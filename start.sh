@@ -14,7 +14,9 @@ if [ -z "$COMPONENT" ]; then
     echo ""
     echo "Components:"
     echo "  server       - Protected resource server (Python/FastAPI)"
+    echo "  server-ts    - Protected resource server (TypeScript/Hono)  [beta]"
     echo "  facilitator  - Payment facilitator service (Python/FastAPI)"
+    echo "  facilitator-ts - Payment facilitator service (TypeScript/Hono) [beta]"
     echo "  client       - Payment client (Python)"
     echo "  client-ts    - Payment client (TypeScript)"
     echo "  a2a-server   - A2A Merchant Server"
@@ -35,17 +37,39 @@ fi
 case "$COMPONENT" in
     server)
         echo "=========================================="
-        echo "Starting X402 Protected Resource Server"
+        echo "Starting X402 Protected Resource Server (Python)"
         echo "=========================================="
         cd server
         "$SCRIPT_DIR/.venv/bin/python" main.py
         ;;
+    server-ts)
+        echo "=========================================="
+        echo "Starting X402 Protected Resource Server (TypeScript)"
+        echo "=========================================="
+        cd server-ts
+        if [ ! -d "node_modules" ]; then
+            echo "Installing dependencies..."
+            npm install
+        fi
+        npm start
+        ;;
     facilitator)
         echo "=========================================="
-        echo "Starting X402 Facilitator"
+        echo "Starting X402 Facilitator (Python)"
         echo "=========================================="
         cd facilitator
         "$SCRIPT_DIR/.venv/bin/python" main.py
+        ;;
+    facilitator-ts)
+        echo "=========================================="
+        echo "Starting X402 Facilitator (TypeScript)"
+        echo "=========================================="
+        cd facilitator-ts
+        if [ ! -d "node_modules" ]; then
+            echo "Installing dependencies..."
+            npm install
+        fi
+        npm start
         ;;
     client)
         echo "=========================================="
@@ -102,7 +126,7 @@ case "$COMPONENT" in
         ;;
     *)
         echo "❌ Unknown component: $COMPONENT"
-        echo "Valid: server, facilitator, client, client-ts, a2a-server, a2a-client"
+        echo "Valid: server, server-ts, facilitator, facilitator-ts, client, client-ts, a2a-server, a2a-client"
         exit 1
         ;;
 esac
