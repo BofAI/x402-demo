@@ -19,3 +19,8 @@
 /logs/server-stdout.log
 /logs/supervisord.log
 .env
+
+# Python bytecode + venv stamps
+__pycache__/
+*.pyc
+.x402-demo-deps-stamp

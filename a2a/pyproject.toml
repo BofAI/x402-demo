@@ -12,7 +12,7 @@ dependencies = [
     "web3>=7.10.0",
     "cdp-sdk>=1.20.0",
     "x402-a2a",
-    "bankofai-x402[tron]",
+    "bankofai-x402[tron] >= 0.6.0b0",
 ]
 
 [build-system]
@@ -32,7 +32,6 @@ server = "server.__main__:main"
 
 [tool.uv.sources]
 x402-a2a = { git = "https://github.com/bankofai/a2a-x402", branch = "main", subdirectory = "python/x402_a2a" }
-bankofai-x402 = { git = "https://github.com/BofAI/x402", tag = "v0.4.1", subdirectory = "python/x402" }
 
 [tool.ruff]
 target-version = "py313"
