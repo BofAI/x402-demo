@@ -9,6 +9,16 @@ cd "$SCRIPT_DIR"
 
 COMPONENT=$1
 
+ensure_node_deps() {
+    local component_dir="$1"
+    cd "$component_dir"
+    echo "Installing/updating npm dependencies..."
+    npm install
+    local sdk_version
+    sdk_version="$(node -p "require('./node_modules/@bankofai/x402/package.json').version")"
+    echo "Using @bankofai/x402 SDK version: ${sdk_version}"
+}
+
 if [ -z "$COMPONENT" ]; then
     echo "Usage: ./start.sh <component>"
     echo ""
@@ -46,11 +56,7 @@ case "$COMPONENT" in
         echo "=========================================="
         echo "Starting X402 Protected Resource Server (TypeScript)"
         echo "=========================================="
-        cd server-ts
-        if [ ! -d "node_modules" ]; then
-            echo "Installing dependencies..."
-            npm install
-        fi
+        ensure_node_deps server-ts
         npm start
         ;;
     facilitator)
@@ -64,11 +70,7 @@ case "$COMPONENT" in
         echo "=========================================="
         echo "Starting X402 Facilitator (TypeScript)"
         echo "=========================================="
-        cd facilitator-ts
-        if [ ! -d "node_modules" ]; then
-            echo "Installing dependencies..."
-            npm install
-        fi
+        ensure_node_deps facilitator-ts
         npm start
         ;;
     client)
@@ -82,11 +84,7 @@ case "$COMPONENT" in
         echo "=========================================="
         echo "Starting X402 Client (TypeScript)"
         echo "=========================================="
-        cd client/typescript
-        if [ ! -d "node_modules" ]; then
-            echo "Installing dependencies..."
-            npm install
-        fi
+        ensure_node_deps client/typescript
         npm start
         ;;
     a2a-server)

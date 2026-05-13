@@ -49,6 +49,14 @@ if (!PAY_TO_ADDRESS) {
   console.error('❌  PAY_TO_ADDRESS is required');
   process.exit(1);
 }
+if (!isTronAddress(PAY_TO_ADDRESS)) {
+  console.error(`❌  PAY_TO_ADDRESS must be a TRON Base58 address for TRON endpoints: ${PAY_TO_ADDRESS}`);
+  process.exit(1);
+}
+if (BSC_PAY_TO_ADDRESS && !isEvmAddress(BSC_PAY_TO_ADDRESS)) {
+  console.error(`❌  BSC_PAY_TO_ADDRESS must be an EVM 0x address for BSC endpoints: ${BSC_PAY_TO_ADDRESS}`);
+  process.exit(1);
+}
 
 // ---------------------------------------------------------------------------
 // FacilitatorClient — mirrors Python's FacilitatorClient
@@ -78,6 +86,14 @@ async function buildAccepts(
   return accepts;
 }
 
+function isTronAddress(address: string): boolean {
+  return /^T[1-9A-HJ-NP-Za-km-z]{33}$/.test(address);
+}
+
+function isEvmAddress(address: string): boolean {
+  return /^0x[a-fA-F0-9]{40}$/.test(address);
+}
+
 // ---------------------------------------------------------------------------
 // Print startup config
 // ---------------------------------------------------------------------------
@@ -87,6 +103,7 @@ console.log('='.repeat(80));
 console.log('X402 Protected Resource Server (TypeScript/Hono) — Configuration');
 console.log('='.repeat(80));
 console.log(`Pay To Address : ${PAY_TO_ADDRESS}`);
+if (BSC_PAY_TO_ADDRESS) console.log(`BSC Pay To    : ${BSC_PAY_TO_ADDRESS}`);
 console.log(`Facilitator URL: ${FACILITATOR_URL}`);
 console.log(`Facilitator API: ${FACILITATOR_API_KEY ? '**configured**' : '(not set)'}`);
 console.log(`GasFree Nile   : ${gasfreeEnabledNile}`);
