@@ -35,8 +35,8 @@ import {
   ExactGasFreeFacilitatorMechanism,
   ExactPermitEvmFacilitatorMechanism,
   ExactEvmFacilitatorMechanism,
-  TronClientSigner,
-  EvmClientSigner,
+  TronFacilitatorSigner,
+  EvmFacilitatorSigner,
   GasFreeAPIClient,
   getGasFreeApiBaseUrl,
   getNetworkTokens,
@@ -74,21 +74,6 @@ const BSC_MAINNET_BASE_FEE: Record<string, string> = {
   EPS: '100000000000000', // 0.0001 EPS (18 decimals on BSC mainnet)
 };
 
-// Helper: build baseFeesByToken map keyed by `${network}:${tokenAddress}`
-function buildBaseFeesByToken(
-  network: string,
-  symbolFees: Record<string, string>,
-): Record<string, string> {
-  const tokens = getNetworkTokens(network);
-  const result: Record<string, string> = {};
-  for (const [symbol, fee] of Object.entries(symbolFees)) {
-    if (tokens[symbol]) {
-      result[`${network}:${tokens[symbol].address.toLowerCase()}`] = fee;
-    }
-  }
-  return result;
-}
-
 // Helper: get GasFree API base URL (env override → config fallback)
 function resolveGasFreeBaseUrl(network: string): string {
   const envSuffix = network.split(':').at(-1)?.toUpperCase();
@@ -101,8 +86,8 @@ function resolveGasFreeBaseUrl(network: string): string {
 async function createFacilitator(): Promise<X402Facilitator> {
   const facilitator = new X402Facilitator();
 
-  // --- TRON signer ---
-  const tronSigner = await TronClientSigner.create();
+  // --- TRON facilitator signer ---
+  const tronSigner = await TronFacilitatorSigner.create();
   const tronAddress = tronSigner.getAddress();
   console.log(`TRON Facilitator Address: ${tronAddress}`);
 
@@ -120,17 +105,16 @@ async function createFacilitator(): Promise<X402Facilitator> {
     }
   }
 
-  // Register TRON mechanisms
+  // Register TRON mechanisms — new signature uses symbol-keyed base fee map.
   for (const suffix of TRON_NETWORKS) {
     const netKey = `tron:${suffix}`;
-    const baseFeesByToken = buildBaseFeesByToken(netKey, TRON_BASE_FEE);
 
     // exact_permit
     facilitator.register(
       [netKey],
-      new ExactPermitTronFacilitatorMechanism({
+      new ExactPermitTronFacilitatorMechanism(tronSigner, {
         feeTo: tronAddress,
-        baseFeesByToken,
+        baseFee: TRON_BASE_FEE,
       }),
     );
 
@@ -138,39 +122,39 @@ async function createFacilitator(): Promise<X402Facilitator> {
     if (gasfreeFlags[suffix] && gasfreeClients[netKey]) {
       facilitator.register(
         [netKey],
-        new ExactGasFreeFacilitatorMechanism({
+        new ExactGasFreeFacilitatorMechanism(tronSigner, {
           feeTo: tronAddress,
-          baseFeesByToken,
+          clients: gasfreeClients,
+          baseFee: TRON_BASE_FEE,
         }),
       );
     }
   }
 
-  // --- EVM / BSC signer ---
-  const evmSigner = await EvmClientSigner.create();
+  // --- EVM / BSC facilitator signer ---
+  const evmSigner = await EvmFacilitatorSigner.create();
   const evmAddress = evmSigner.getAddress();
   console.log(`EVM  Facilitator Address: ${evmAddress}`);
 
   // BSC Testnet
-  const bscTestFeesByToken = {
-    ...buildBaseFeesByToken(NETWORKS.BSC_TESTNET, BSC_BASE_FEE),
-  };
   facilitator.register(
     [NETWORKS.BSC_TESTNET],
-    new ExactPermitEvmFacilitatorMechanism({ feeTo: evmAddress, baseFeesByToken: bscTestFeesByToken }),
+    new ExactPermitEvmFacilitatorMechanism(evmSigner, {
+      feeTo: evmAddress,
+      baseFee: BSC_BASE_FEE,
+    }),
   );
-  facilitator.register([NETWORKS.BSC_TESTNET], new ExactEvmFacilitatorMechanism());
+  facilitator.register([NETWORKS.BSC_TESTNET], new ExactEvmFacilitatorMechanism(evmSigner));
 
   // BSC Mainnet
-  const bscMainFeesByToken = {
-    ...buildBaseFeesByToken(NETWORKS.BSC_MAINNET, BSC_BASE_FEE),
-    ...buildBaseFeesByToken(NETWORKS.BSC_MAINNET, BSC_MAINNET_BASE_FEE),
-  };
   facilitator.register(
     [NETWORKS.BSC_MAINNET],
-    new ExactPermitEvmFacilitatorMechanism({ feeTo: evmAddress, baseFeesByToken: bscMainFeesByToken }),
+    new ExactPermitEvmFacilitatorMechanism(evmSigner, {
+      feeTo: evmAddress,
+      baseFee: { ...BSC_BASE_FEE, ...BSC_MAINNET_BASE_FEE },
+    }),
   );
-  facilitator.register([NETWORKS.BSC_MAINNET], new ExactEvmFacilitatorMechanism());
+  facilitator.register([NETWORKS.BSC_MAINNET], new ExactEvmFacilitatorMechanism(evmSigner));
 
   return facilitator;
 }

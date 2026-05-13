@@ -109,12 +109,15 @@ async function main(): Promise<void> {
   // Balance policy: auto-resolves signers from registered mechanisms
   x402.registerPolicy(SufficientBalancePolicy);
 
-  // Prefer exact_gasfree USDT (same as Python client's PreferGasFreeUSDTPolicy)
+  // Prefer exact_gasfree USDT by default; set X402_PREFER=exact_permit to flip
+  // (used for smoke-testing the TS facilitator's permit path before gasfree
+  // is fully ported in 0.6.0-beta.1+).
+  const preferScheme = process.env.X402_PREFER ?? 'exact_gasfree';
   x402.registerPolicy({
     apply(requirements: PaymentRequirements[]): PaymentRequirements[] {
       for (const req of requirements) {
         const tokenInfo = findByAddress(req.network, req.asset);
-        if (req.scheme === 'exact_gasfree' && tokenInfo?.symbol === 'USDT') {
+        if (req.scheme === preferScheme && tokenInfo?.symbol === 'USDT') {
           console.log(`🎯 Policy: Force selecting ${req.scheme} (${tokenInfo.symbol})`);
           return [req];
         }
