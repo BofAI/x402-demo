@@ -4,6 +4,8 @@
 
 The **X402 Demo** provides a practical demonstration of integrating the **x402 payment protocol** with the TRON and BSC blockchains. It showcases how decentralized micropayments can enable pay-per-access workflows — including gasless transactions via GasFree and multi-agent orchestration via A2A.
 
+This demo tracks the official `0.6.0` SDK release: TypeScript packages use `@bankofai/x402@0.6.0`, and Python components require `bankofai-x402>=0.6.0`.
+
 ### Payment Workflow
 
 The demo simulates a payment workflow involving three conceptual agents:

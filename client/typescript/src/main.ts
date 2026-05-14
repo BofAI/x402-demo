@@ -109,9 +109,8 @@ async function main(): Promise<void> {
   // Balance policy: auto-resolves signers from registered mechanisms
   x402.registerPolicy(SufficientBalancePolicy);
 
-  // Prefer exact_gasfree USDT by default; set X402_PREFER=exact_permit to flip
-  // (used for smoke-testing the TS facilitator's permit path before gasfree
-  // is fully ported in 0.6.0-beta.1+).
+  // Prefer exact_gasfree USDT by default; set X402_PREFER=exact_permit to
+  // smoke-test the TS facilitator's permit path.
   const preferScheme = process.env.X402_PREFER ?? 'exact_gasfree';
   x402.registerPolicy({
     apply(requirements: PaymentRequirements[]): PaymentRequirements[] {

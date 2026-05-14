@@ -2,7 +2,7 @@
 # Install with: pip install -r requirements.txt
 
 # Core bankofai-x402 SDK with TRON, EVM, and FastAPI support
-bankofai-x402[tron,evm,fastapi] >= 0.6.0b0
+bankofai-x402[tron,evm,fastapi] >= 0.6.0
 
 # Web framework
 fastapi>=0.104.0

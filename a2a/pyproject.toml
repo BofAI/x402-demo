@@ -12,7 +12,7 @@ dependencies = [
     "web3>=7.10.0",
     "cdp-sdk>=1.20.0",
     "x402-a2a",
-    "bankofai-x402[tron] >= 0.6.0b0",
+    "bankofai-x402[tron] >= 0.6.0",
 ]
 
 [build-system]
